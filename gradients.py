@@ -1,13 +1,6 @@
 import numpy as np
-
 import multiprocessing as mp
-
-from measures import *
 from draw import *
-
-
-
-
 
 
 def partial_dif(i, _vars, _norm, _IMO, _N):
@@ -67,6 +60,41 @@ def partial_dif_2(i, _vars, _norm, _IMO, _N, _delta=.2, scheme='simple'):
         d1 = _norm(images[0], _IMO)
         d2 = _norm(images[1], _IMO)
         return (d2 - d1) / delta
+
+
+def partial_dif_3(i, _vars, _norm, _IMO, _N, _delta=.2, scheme='simple'):
+    """ INTENDED FOR CONTINIUS VARIABLES
+        Numerical Partial derivative. Implements the idea of the "warm start". ie it will only calculate the
+        difference in the part of the image that is changing.
+        :param i: integer, coordinate
+        :param _vars: N,10 arraythe variables from which to evaluate de function
+        :param _norm: function, the norm used to compute de difference
+        :param _IMO: H,W array, objective image
+        :param _N: integer, global parameter, number of shapes used
+        :param _delta: float, step for the differentiation
+        :param scheme: int, {0,1,2} 0: simple  1: two points   2: Five-point stencil, other: simple
+        :return:
+        """
+    delta = _delta
+    if scheme == 1:
+        images = draw_multi_image_2(_vars, i, (delta, -delta), _N)
+        d1 = _norm(images[0], _IMO)
+        d2 = _norm(images[1], _IMO)
+        return (d1 - d2) / (2 * delta)
+    elif scheme == 2:
+        images = draw_multi_image_2(_vars, i, (2 * delta, delta, -delta, -2 * delta), _N)
+        d1 = _norm(images[0], _IMO)
+        d2 = _norm(images[1], _IMO)
+        d3 = _norm(images[2], _IMO)
+        d4 = _norm(images[3], _IMO)
+        return ((8 * d2 + d4) - (8 * d3 + d1)) / (12 * delta)
+    else:
+        images = draw_multi_image_2(_vars, i, (0, delta), _N)
+        d1 = _norm(images[0], _IMO)
+        d2 = _norm(images[1], _IMO)
+        return (d2 - d1) / delta
+    pass
+
 
 
 def numerical_grad(vars, norm, IMO, N):

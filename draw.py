@@ -135,6 +135,82 @@ def draw_multi_image_2(vars, H, W, index, perturbations, background_color=(1., 1
     return outs
 
 
+def draw_multi_image_3(vars, H, W, index, perturbations, background_color=(1., 1., 1.),
+                       background_alpha=.2, return_submatrix_coords=False):
+    """ (there is more space for optimization if the kind of the perturbated variable is taken into account)
+        (there is more space for optimization if the submatrix coords take into account the channels)
+    Renders N triangles with lineal combination of colors.
+    Returns k images, where k is the length of 'perturbarions'
+    Each image has a perturbation from the perturbation array in the vars[index] (flat) coordinate.
+    If return_submatrix_coords=True the function also returns the coords of the submatrix in which there is change.
+    :param vars: N,10 array, initial variables.
+    :param index: integer, position to make the perturbation
+    :param perturbations: 1D array, values of the perturbations (to be added)
+    :param background_color: (r,g,b), colors between 0 and 1.
+    :param background_alpha: positive float. ZERO will cause error
+    :param return_submatrix_coords: boolean, if true the submatrix windows coordinates are computed and returned
+    :return: k,H,W,3 array, k images (and ((x1,y1),(x2,y2)) conditioned on return_submatrix_coords)
+    """
+    N = len(vars)
+    K = len(perturbations)
+    which_layer = index // 10
+    ind = index % 10
+    v = list(vars)
+    v_layer = v.pop(which_layer)
+
+    shape_matrix = np.zeros((H, W, N), np.dtype('float'))
+    for i in range(N - 1):
+        vertex = np.array(v[i][0:6])
+        args = vertex, np.max(v[i][-1], 0)
+        shape_matrix[:, :, i + 1] = triag_matrix_2(args[0], args[1], H, W)
+
+    shape_matrix[:, :, 0] = np.ones((H, W), np.dtype('float')) * background_alpha  # adds white background
+    alpha_sum = np.sum(shape_matrix, axis=2)  # H,W dimension.
+
+    # The common part of the calculation.
+    RGB = list(np.asarray(v)[:, 6:9])  # colors N - 1
+    RGB.insert(0, background_color)  # insert manually the background
+    RGB = np.asarray(RGB)
+    RGB = RGB * (RGB >= 0)  # Colors must be positive
+    out = shape_matrix @ RGB  # the matrix multiplication magic
+
+    outs = np.zeros((K, H, W, 3))
+    s_x, s_y = 0, 0
+    e_x, e_y = H - 1, W - 1
+    for k in range(K):
+        u = np.copy(v_layer)
+        u[ind] += perturbations[k]
+        vertex = np.asarray(u)[0:6]
+        args = vertex, np.max(u[-1], 0)
+        lay = triag_matrix_2(args[0], args[1], H, W)
+        if return_submatrix_coords:
+            x_axis, y_axis = np.nonzero(lay)
+            x_min = np.min(x_axis)
+            x_max = np.max(x_axis)
+            y_min = np.min(y_axis)
+            y_max = np.max(y_axis)
+            if s_x < x_min:
+                s_x = x_min
+            if s_y < y_min:
+                s_y = y_min
+            if e_x > x_max:
+                e_x = x_max
+            if e_y > y_max:
+                e_y = y_max
+        a_sum = alpha_sum + lay
+        lay.shape = H, W, 1
+        col = np.asarray(u[6:9])
+        col = col * (col >= 0)
+        col.shape = 1, 3
+        outs[k] = out + lay @ col
+        for i in range(3):  # Normalization
+            outs[k][:, :, i] = (out[:, :, i] / a_sum)
+    if return_submatrix_coords:
+        return outs, ((s_x, s_y), (e_x, e_y))
+    else:
+        return outs
+
+
 def draw_image_1(vars, H, W, N):
     """ USES INTEGERS FOR POSITIONS - DEPRECATED
     Renders N triangles with lineal combination of colors

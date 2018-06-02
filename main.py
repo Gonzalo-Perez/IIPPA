@@ -6,7 +6,7 @@ from iter_methods import *
 
 N = 15
 
-
+# Test change
 
 if __name__ == "__main__":
     img_objective = cv2.imread("circulos_coloridos.png")

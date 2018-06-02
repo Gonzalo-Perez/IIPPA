@@ -3,19 +3,37 @@ from skimage.measure import compare_ssim as ssim
 from scipy.ndimage.measurements import center_of_mass
 
 
-def MAE(imageA, imageB):  # Error absoluto medio (Se asume que ambas imágenes tienen el mismo tamaño)
+def MAE(imageA, imageB):
+    """
+     # Error absoluto medio (Se asume que ambas imágenes tienen el mismo tamaño)
+    :param imageA: image 1
+    :param imageB:  image 2
+    :return: positive float
+    """
     err = np.sum(np.abs(imageA.astype("float") - imageB.astype("float")))
     err /= float(imageA.shape[0] * imageA.shape[1])
     return err
 
 
-def MSE(imageA, imageB):  # Error cuadrático medio (Se asume que ambas imágenes tienen el mismo tamaño)
+def MSE(imageA, imageB):
+    """
+    Error cuadrático medio (Se asume que ambas imágenes tienen el mismo tamaño)
+    :param imageA:
+    :param imageB:
+    :return:
+    """
     err = np.sum((imageA.astype("float") - imageB.astype("float")) ** 2)
     err /= float(imageA.shape[0] * imageA.shape[1])
     return err
 
 
 def SSIM(i1, i2):
+    """
+    SSIM, 1 es best.
+    :param i1:
+    :param i2:
+    :return:
+    """
     return 1 - ssim(i1, i2, data_range=(np.max(i2) - np.min(i2)), multichannel=True)
 
 

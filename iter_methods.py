@@ -64,6 +64,8 @@ def simple_gradient(target_image, N, norm, step, max_iter, tol, _delta=.2, diff_
     :param show_progress: boolean
     :return:
     """
+    H = target_image.shape[0]
+    W = target_image.shape[1]
 
     x_i = get_random_start_2()
     it = 0

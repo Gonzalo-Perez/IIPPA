@@ -176,7 +176,7 @@ def draw_multi_image(vars, index, perturbations, H, W, N, _N):
 
 
 # LAST VERSION
-def draw_multi_image_2(vars, index, perturbations, H, W, N, _N):
+def draw_multi_image_2(vars, H, W, index, perturbations):
     """ (SE PUEDE OPTIMIZAR MAS SI SE DISTINGUE QUE TIPO DE VARIABLE ESTA SIENDO PERTURBADA)
     Renders N triangles with lineal combination of colors.
     Returns k images, where k is the length of 'perturbarions'
@@ -189,6 +189,7 @@ def draw_multi_image_2(vars, index, perturbations, H, W, N, _N):
     BACKGROUND_ALPHA = .2
     BACKGROUND_COLOR = [1., 1., 1.]
 
+    N = len(vars)
     K = len(perturbations)
     which_layer = index // 10
     ind = index % 10

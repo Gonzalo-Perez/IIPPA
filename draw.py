@@ -5,7 +5,7 @@ import time
 
 
 def triag_matrix_1(x, alpha, H, W):
-    """ USES INTEGERS FOR POSITIONS
+    """ USES INTEGERS FOR POSITIONS - DEPRECATED
     Draws the shape of a triangle in a zero matrix with the value of alpha
     :param x: 3,2 array, the coords of the vertex
     :param alpha: double, opacity
@@ -73,7 +73,7 @@ def variable_transformation(v):
 
 
 def draw_image_1(vars, H, W, N):
-    """ USES INTEGERS FOR POSITIONS
+    """ USES INTEGERS FOR POSITIONS - DEPRECATED
     Renders N triangles with lineal combination of colors
     :param vars: N, 10 array. (x1,y1,x2,y2,x3,y3,r,g,b,a)
     r,g,b: doubles
@@ -97,7 +97,7 @@ def draw_image_1(vars, H, W, N):
 
 
 # LAST VERSION
-def draw_image_2(vars, H, W, N):
+def draw_image_2(vars, H, W, background_color=(1., 1., 1.), background_alpha=.2 ):
     """ USED DOUBLES FOR POSITIONS
     FIXED, base dimming
     Renders N triangles with lineal combination of colors
@@ -106,33 +106,27 @@ def draw_image_2(vars, H, W, N):
     x_i,y_i: integers (will be rounded)
     :return: H,W,3 matrix
     """
-    global T1, T2
-    tt = time.time()
-
-    BACKGROUND_ALPHA = .2
-    BACKGROUND_COLOR = [1., 1., 1.]
+    N = len(vars)
     shape_matrix = np.zeros((H, W, N + 1), np.dtype('float'))
     for i in range(N):
         vertex = np.array(vars[i][0:6])
         args = vertex, np.max(vars[i][-1], 0)
         shape_matrix[:, :, i + 1] = triag_matrix_2(args[0], args[1])
-    shape_matrix[:, :, 0] = np.ones((H, W)) * BACKGROUND_ALPHA
-    T1 += time.time() - tt
-    tt = time.time()
+    shape_matrix[:, :, 0] = np.ones((H, W)) * background_alpha
+
     alpha_sum = np.sum(shape_matrix, axis=2)  # H,W dimension.
     RGB = list(vars[:, 6:9])  # colors
-    RGB.insert(0, BACKGROUND_COLOR)
+    RGB.insert(0, background_color)
     RGB = np.asarray(RGB)
     RGB = RGB * (RGB >= 0)  # Colors must be positive
     out = shape_matrix @ RGB  # the matrix multiplication magic
     for i in range(3):  # Normalization
         out[:, :, i] = (out[:, :, i] / alpha_sum)
-    T2 += time.time() - tt
     return out
 
 
-def draw_multi_image(vars, index, perturbations, H, W, N, _N):
-    """
+def draw_multi_image(vars, index, perturbations):
+    """ DEPRECATED
     Renders N triangles with lineal combination of colors.
     Returns k images, where k is the lenght of 'perturbarions'
     Each image has a perturbation from the perturbation array in the vars[index] coordinate.
@@ -176,7 +170,7 @@ def draw_multi_image(vars, index, perturbations, H, W, N, _N):
 
 
 # LAST VERSION
-def draw_multi_image_2(vars, H, W, index, perturbations):
+def draw_multi_image_2(vars, H, W, index, perturbations, background_color=(1., 1., 1.), background_alpha=.2):
     """ (SE PUEDE OPTIMIZAR MAS SI SE DISTINGUE QUE TIPO DE VARIABLE ESTA SIENDO PERTURBADA)
     Renders N triangles with lineal combination of colors.
     Returns k images, where k is the length of 'perturbarions'
@@ -186,9 +180,6 @@ def draw_multi_image_2(vars, H, W, index, perturbations):
     :param perturbations: 1D array, values of the perturbations (to be added)
     :return: k,H,W,3 array, k images
     """
-    BACKGROUND_ALPHA = .2
-    BACKGROUND_COLOR = [1., 1., 1.]
-
     N = len(vars)
     K = len(perturbations)
     which_layer = index // 10
@@ -200,13 +191,13 @@ def draw_multi_image_2(vars, H, W, index, perturbations):
     for i in range(N - 1):
         vertex = np.array(v[i][0:6])
         args = vertex, np.max(v[i][-1], 0)
-        shape_matrix[:, :, i + 1] = triag_matrix_2(args[0], args[1])
+        shape_matrix[:, :, i + 1] = triag_matrix_2(args[0], args[1], H, W)
 
-    shape_matrix[:, :, 0] = np.ones((H, W), np.dtype('float')) * BACKGROUND_ALPHA  # adds white background
+    shape_matrix[:, :, 0] = np.ones((H, W), np.dtype('float')) * background_alpha  # adds white background
     alpha_sum = np.sum(shape_matrix, axis=2)  # H,W dimension.
 
     RGB = list(np.asarray(v)[:, 6:9])  # colors N - 1
-    RGB.insert(0, BACKGROUND_COLOR)  # insert manually the background
+    RGB.insert(0, background_color)  # insert manually the background
     RGB = np.asarray(RGB)
     RGB = RGB * (RGB >= 0)  # Colors must be positive
     out = shape_matrix @ RGB  # the matrix multiplication magic
@@ -217,7 +208,7 @@ def draw_multi_image_2(vars, H, W, index, perturbations):
         u[ind] += perturbations[k]
         vertex = np.asarray(u)[0:6]
         args = vertex, np.max(u[-1], 0)
-        lay = triag_matrix_2(args[0], args[1])
+        lay = triag_matrix_2(args[0], args[1], H, W)
         a_sum = alpha_sum + lay
         lay.shape = H, W, 1
         col = np.asarray(u[6:9])

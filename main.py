@@ -1,15 +1,7 @@
 import numpy as np
 import cv2
-import random
-from skimage.measure import compare_ssim as ssim
-# from skimage.measure import compare_mse as MSE
-import multiprocessing as mp
-import time
-from scipy.ndimage.measurements import center_of_mass
-import numexpr as ne
 
-# np.random.seed(1)
-# random.seed(1)
+
 H = 100
 W = 100
 N = 15
@@ -17,8 +9,8 @@ MM = np.array([[W, H],  # DO NOT DELETE!
                [W, H],
                [W, H]], np.dtype('float'))
 
-T1 = 0
-T2 = 0
+
+
 
 if __name__ == "__main__":
     img_objective = cv2.imread("circulos_coloridos.png")

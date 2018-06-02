@@ -6,9 +6,6 @@ from gradients import *
 from draw import *
 
 
-
-
-
 def get_random_start_1(N,H,W):
     """ USED INTEGERS FOR POSITIONS
     Returns a random set of coordinates for the

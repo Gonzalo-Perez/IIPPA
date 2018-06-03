@@ -76,7 +76,7 @@ def draw_image_2(vars, H, W, background_color=(1., 1., 1.), background_alpha=.2)
     RGB = list(vars[:, 6:9])  # colors
     RGB.insert(0, background_color)
     RGB = np.asarray(RGB)
-    RGB = RGB * (RGB >= 0)  # Colors must be positive
+    RGB = RGB * (RGB < 1) * (RGB >= 0) + (RGB >= 1) # Colors must be between 0 and 1.
     out = shape_matrix @ RGB  # the matrix multiplication magic
     for i in range(3):  # Normalization
         out[:, :, i] = (out[:, :, i] / alpha_sum)
@@ -120,7 +120,7 @@ def draw_multi_image_2(vars, H, W, index, perturbations, background_color=(1., 1
     RGB = list(np.asarray(v)[:, 6:9])  # colors N - 1
     RGB.insert(0, background_color)  # insert manually the background
     RGB = np.asarray(RGB)
-    RGB = RGB * (RGB >= 0)  # Colors must be positive
+    RGB = RGB * (RGB < 1) * (RGB >= 0) + (RGB >= 1)  # Colors must be between 0 and 1.
     out = shape_matrix @ RGB  # the matrix multiplication magic
 
     outs = np.zeros((K, H, W, 3))
@@ -149,11 +149,12 @@ def draw_multi_image_2(vars, H, W, index, perturbations, background_color=(1., 1
         a_sum = alpha_sum + lay
         lay.shape = H, W, 1
         col = np.asarray(u[6:9])
-        col = col * (col >= 0)
+        col = col * (col >= 0) * (col < 1) + (col >= 1) # Colors must be between 0 and 1.
         col.shape = 1, 3
-        outs[k] = out + lay @ col
+        last = lay @ col
+        outs[k] = out + last
         for i in range(3):  # Normalization
-            outs[k][:, :, i] = (out[:, :, i] / a_sum)
+            outs[k][:, :, i] = (outs[k][:, :, i] / a_sum)
     if return_submatrix_coords:
         return outs, (s_x, e_x, s_y, e_y)
     else:

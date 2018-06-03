@@ -6,7 +6,7 @@ from gradients import *
 from draw import *
 
 
-def get_random_start_2(N, H, W):
+def get_random_start_2(N):
     """ USED DOUBLES FOR POSITIONS
     Returns a random set of coordinates for the
     :param seed: integer
@@ -19,8 +19,33 @@ def get_random_start_2(N, H, W):
             vars[i] = np.array([np.random.uniform(), np.random.uniform(),
                                 np.random.uniform(), np.random.uniform(),
                                 np.random.uniform(), np.random.uniform(),
-                                np.random.uniform(),
-                                np.random.uniform(),
+                                np.random.uniform(), # blue
+                                np.random.uniform(), # green
+                                np.random.uniform(), # red
+                                np.random.uniform()])
+        else:
+            vars[i] = np.array([np.random.uniform(), np.random.uniform(),
+                                np.random.uniform(), np.random.uniform(),
+                                np.random.uniform(), np.random.uniform(),
+                                0, 0, 0, 10])
+    return vars
+
+
+def get_red_random_start_2(N):
+    """ USED DOUBLES FOR POSITIONS
+    Returns a random set of coordinates for the
+    :param seed: integer
+    :return: vars
+    """
+    black = False
+    vars = np.zeros((N, 10))
+    for i in range(N):
+        if not black:
+            vars[i] = np.array([np.random.uniform(), np.random.uniform(),
+                                np.random.uniform(), np.random.uniform(),
+                                np.random.uniform(), np.random.uniform(),
+                                0,
+                                0,
                                 np.random.uniform(),
                                 np.random.uniform()])
         else:
@@ -48,7 +73,8 @@ def simple_gradient_method(target_image, N, norm, step, max_iter, tol, _delta=.2
     """
     H = target_image.shape[0]
     W = target_image.shape[1]
-    x_i = get_random_start_2(N, H, W)
+    x_i = get_random_start_2(N)
+    # x_i = get_red_random_start_2(N)
     it = 0
     while it < max_iter:
         print('computing gradient...')
@@ -56,10 +82,16 @@ def simple_gradient_method(target_image, N, norm, step, max_iter, tol, _delta=.2
         grad = numerical_grad(x_i, norm, target_image, delta=_delta, _scheme=diff_scheme_to_use,
                               parallel=use_threads)
         print("Iteration: {0}, Elapsed time: {1}".format(it, time.time() - tt))
-        print("x: {0}".format(x_i))
-        x_next = x_i - step(it) * grad
+        # print("x: {0}".format(x_i))
+        x_next = update_x(x_i, grad, step(it), color_boundaries=True, vertex_boundaries=False)
         difference = norm(draw_image_2(x_i, H, W), target_image)
-        print("Gradient: {0}".format(grad))
+        # print("Gradient: {0}".format(grad))
+        print('Gradient:')
+        for i in range(10):
+            if i <= 5:
+                print('vertex:', grad[:, i])
+            else:
+                print('color:', grad[:, i])
         print("Difference from target: {0}".format(difference))
         if difference < tol:
             x_i = x_next
@@ -74,6 +106,27 @@ def simple_gradient_method(target_image, N, norm, step, max_iter, tol, _delta=.2
 
         it += 1
     return x_i
+
+
+def update_x(x_i, grad, step, color_boundaries=True, vertex_boundaries=False):
+    """
+    returns the updated x_i, checks and corrects boundaries of color and vertex positions.
+    :param x_i: 
+    :param grad: 
+    :param step: 
+    :param color_boundaries: 
+    :param vertex_boundaries: 
+    :return: 
+    """
+    x = x_i - step * grad
+    #check alpha positive
+    x[:, 9:10] = x[:, 9:10] * (x[:, 9:10] >= 0)
+    if color_boundaries:
+        x[:,6:9] = x[:,6:9] * (x[:,6:9] < 1) * (x[:,6:9] >= 0) + (x[:,6:9] >= 1)
+    if vertex_boundaries:
+        x[:, 0:6] = x[:, 0:6] * (x[:, 0:6] < 1) * (x[:, 0:6] >= 0) + (x[:, 0:6] >= 1)
+    return x
+
 
 
 # NEEDS REFACTORING

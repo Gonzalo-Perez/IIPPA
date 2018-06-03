@@ -1,4 +1,5 @@
 import numpy as np
+from measures import *
 import multiprocessing as mp
 from draw import *
 
@@ -15,7 +16,6 @@ def partial_dif_2(i, _vars, _norm, _IMO, _delta=.2, scheme=0):
     :param scheme: int, {0,1,2} 0: simple  1: two points   2: Five-point stencil, other: simple
     :return:
     """
-    # if i % 10 >= 6: return 0
     H, W = _IMO.shape[0], _IMO.shape[1]
     delta = _delta
     if scheme == 1:
@@ -35,6 +35,40 @@ def partial_dif_2(i, _vars, _norm, _IMO, _delta=.2, scheme=0):
         d1 = _norm(images[0], _IMO)
         d2 = _norm(images[1], _IMO)
         return (d2 - d1) / delta
+
+
+def partial_dif_2_1(i, _vars, norm_mode, _IMO, _delta=.2, scheme=0):
+    """
+    Numerical Partial derivative, build for parallelization.
+    :param i: integer, coordinate
+    :param _vars: N,10 arraythe variables from which to evaluate de function
+    :param _norm: function, the norm used to compute de difference
+    :param _IMO: H,W array, objective image
+    :param _N: integer, global parameter, number of shapes used
+    :param _delta: float, step for the differentiation
+    :param scheme: int, {0,1,2} 0: simple  1: two points   2: Five-point stencil, other: simple
+    :return:
+    """
+    H, W = _IMO.shape[0], _IMO.shape[1]
+    delta = _delta
+    if scheme == 1:
+        images = draw_multi_image_2(_vars, H, W, i, (delta, -delta))
+        d1 = general_norm_1(images[0], _IMO, norm_mode)
+        d2 = general_norm_1(images[1], _IMO, norm_mode)
+        return (d1 - d2) / (2 * delta)
+    elif scheme == 2:
+        images = draw_multi_image_2(_vars, H, W, i, (2 * delta, delta, -delta, -2 * delta))
+        d1 = general_norm_1(images[0], _IMO, norm_mode)
+        d2 = general_norm_1(images[1], _IMO, norm_mode)
+        d3 = general_norm_1(images[2], _IMO, norm_mode)
+        d4 = general_norm_1(images[3], _IMO, norm_mode)
+        return ((8 * d2 + d4) - (8 * d3 + d1)) / (12 * delta)
+    else:
+        images = draw_multi_image_2(_vars, H, W, i, (0, delta))
+        d1 = general_norm_1(images[0], _IMO, norm_mode)
+        d2 = general_norm_1(images[1], _IMO, norm_mode)
+        return (d2 - d1) / delta
+
 
 
 def partial_dif_3(i, _vars, _norm, _IMO, _delta=.2, scheme=0):
@@ -127,6 +161,30 @@ def numerical_grad(vars, norm, IMO, delta=.2, _scheme=0, parallel=False):
     else:
         grad = np.asarray([partial_dif_2
                            (i, vars, norm, IMO, _delta=delta, scheme=_scheme) for i in range(len(np.ravel(vars)))])
+    grad = np.asarray(grad)
+    grad.shape = N, 10
+    return grad
+
+
+def numerical_grad_2(vars, norm_mode, IMO, delta=.2, _scheme=0, parallel=True):
+    """
+    Returns the gradient computed numerically, considering the passed norm
+    :param vars: vars from which to evaluate
+    :param norm_mode: integer, norm to consider de difference
+    :param IMO: Objective image
+    :param N: number of triangles
+    :param _scheme: argument to pass to the partial differentiation method (integer)
+    :param parallel: boolean, use parallelization
+    :return: array, gradient
+    """
+    N = len(vars)
+    if parallel:
+        with mp.Pool() as p:
+            grad = p.starmap(partial_dif_2_1,
+                             [(i, vars, norm_mode, IMO, delta, _scheme) for i in range(len(np.ravel(vars)))])
+    else:
+        grad = np.asarray([partial_dif_2_1
+                           (i, vars, norm_mode, IMO, _delta=delta, scheme=_scheme) for i in range(len(np.ravel(vars)))])
     grad = np.asarray(grad)
     grad.shape = N, 10
     return grad

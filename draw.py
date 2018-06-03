@@ -55,7 +55,7 @@ def variable_transformation(v):
     return out
 
 
-def draw_image_2(vars, H, W, background_color=(1., 1., 1.), background_alpha=.2):
+def draw_image_2(vars, H, W, background_color=(1., 1., 1.), background_alpha=.05):
     """ USED DOUBLES FOR POSITIONS
     FIXED, base dimming
     Renders N triangles with lineal combination of colors
@@ -84,7 +84,7 @@ def draw_image_2(vars, H, W, background_color=(1., 1., 1.), background_alpha=.2)
 
 
 def draw_multi_image_2(vars, H, W, index, perturbations, background_color=(1., 1., 1.),
-                       background_alpha=.2, return_submatrix_coords=False):
+                       background_alpha=.05, return_submatrix_coords=False):
     """ THE SUBMATRIX COORDS ARE NOT WORKING
         (there is more space for optimization if the kind of the perturbated variable is taken into account)
         (there is more space for optimization if the submatrix coords take into account the channels)
@@ -130,7 +130,7 @@ def draw_multi_image_2(vars, H, W, index, perturbations, background_color=(1., 1
         u = np.copy(v_layer)
         u[ind] += perturbations[k]
         vertex = np.asarray(u)[0:6]
-        args = vertex, np.max(u[-1], 0)
+        args = vertex, np.max((u[-1], 0))
         lay = triag_matrix_2(args[0], args[1], H, W)
         if return_submatrix_coords:
             x_axis, y_axis = np.nonzero(lay)
@@ -147,6 +147,8 @@ def draw_multi_image_2(vars, H, W, index, perturbations, background_color=(1., 1
             if e_y > y_max:
                 e_y = y_max
         a_sum = alpha_sum + lay
+        if np.min(a_sum) <= 0:
+            print('Problem!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
         lay.shape = H, W, 1
         col = np.asarray(u[6:9])
         col = col * (col >= 0) * (col < 1) + (col >= 1) # Colors must be between 0 and 1.

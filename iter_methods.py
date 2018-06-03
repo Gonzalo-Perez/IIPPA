@@ -4,6 +4,7 @@ import time
 
 from gradients import *
 from draw import *
+from measures import general_norm_1
 
 
 def get_random_start_2(N):
@@ -19,9 +20,9 @@ def get_random_start_2(N):
             vars[i] = np.array([np.random.uniform(), np.random.uniform(),
                                 np.random.uniform(), np.random.uniform(),
                                 np.random.uniform(), np.random.uniform(),
-                                np.random.uniform(), # blue
-                                np.random.uniform(), # green
-                                np.random.uniform(), # red
+                                np.random.uniform(),  # blue
+                                np.random.uniform(),  # green
+                                np.random.uniform(),  # red
                                 np.random.uniform()])
         else:
             vars[i] = np.array([np.random.uniform(), np.random.uniform(),
@@ -56,8 +57,9 @@ def get_red_random_start_2(N):
     return vars
 
 
-def simple_gradient_method(target_image, N, norm, step, max_iter, tol, _delta=.2, diff_scheme_to_use=0, use_threads=False,
-                    show_progress=False):
+def simple_gradient_method(target_image, N, norm, step, max_iter, tol, _delta=.2, diff_scheme_to_use=0,
+                           use_threads=False,
+                           show_progress=False):
     """
     Simple gradient descent
     :param target_image: image to adjust. must have float colors
@@ -101,9 +103,62 @@ def simple_gradient_method(target_image, N, norm, step, max_iter, tol, _delta=.2
             imagen = draw_image_2(x_i, H, W)
             cv2.imshow("Objective", imagen)
             if it % 5 == 0:
-                cv2.imwrite('iter_images/simple_grad_progress{}.png'.format(str(it)), np.array((imagen * 255), np.dtype(int)))
+                cv2.imwrite('iter_images/simple_grad_progress{}.png'.format(str(it)),
+                            np.array((imagen * 255), np.dtype(int)))
             cv2.waitKey(1)
 
+        it += 1
+    return x_i
+
+
+def simple_gradient_method_parallel(target_image, N, norm_mode, step, max_iter, tol, _delta=.2,
+                                    diff_scheme_to_use=0, use_threads=True, show_progress=False):
+    """
+    Simple gradient descent
+    :param target_image: image to adjust. must have float colors
+    :param norm_mode: integer, norm to compare images
+    :param step: function, step to consider
+    :param max_iter: integer, max number of iterations
+    :param tol: double, tolerance to stop iterations
+    :param _delta: double, for numerical differentiation calculation
+    :param diff_scheme_to_use: {0,1,2} to be passed to numerical differentiation
+    :param use_threads: boolean
+    :param show_progress: boolean
+    :return:
+    """
+    H = target_image.shape[0]
+    W = target_image.shape[1]
+    x_i = get_random_start_2(N)
+    # x_i = get_red_random_start_2(N)
+    it = 0
+    while it < max_iter:
+        print('computing gradient...')
+        tt = time.time()
+        grad = numerical_grad_2(x_i, norm_mode, target_image, delta=_delta, _scheme=diff_scheme_to_use,
+                                parallel=use_threads)
+        print("Iteration: {0}, Elapsed time: {1}".format(it, time.time() - tt))
+        # print("x: {0}".format(x_i))
+        x_next = update_x(x_i, grad, step(it), color_boundaries=True, vertex_boundaries=False)
+        difference = general_norm_1(draw_image_2(x_i, H, W), target_image, norm_mode)
+        # print("Gradient: {0}".format(grad))
+        print('Gradient:')
+        for i in range(10):
+            if i <= 5:
+                print('vertex:', grad[:, i])
+            else:
+                print('color:', grad[:, i])
+        print("Difference from target: {0}".format(difference))
+        if difference < tol:
+            x_i = x_next
+            break
+        x_i = x_next
+        if show_progress:
+            imagen = draw_image_2(x_i, H, W)
+            cv2.imshow("Objective", imagen)
+            if it % 5 == 0:
+                cv2.imwrite('iter_images/simple_grad_progress{}.png'.format(str(it)),
+                            np.array((imagen * 255), np.dtype(int)))
+            cv2.waitKey(1)
         it += 1
     return x_i
 
@@ -119,14 +174,13 @@ def update_x(x_i, grad, step, color_boundaries=True, vertex_boundaries=False):
     :return: 
     """
     x = x_i - step * grad
-    #check alpha positive
+    # check alpha positive
     x[:, 9:10] = x[:, 9:10] * (x[:, 9:10] >= 0)
     if color_boundaries:
-        x[:,6:9] = x[:,6:9] * (x[:,6:9] < 1) * (x[:,6:9] >= 0) + (x[:,6:9] >= 1)
+        x[:, 6:9] = x[:, 6:9] * (x[:, 6:9] < 1) * (x[:, 6:9] >= 0) + (x[:, 6:9] >= 1)
     if vertex_boundaries:
         x[:, 0:6] = x[:, 0:6] * (x[:, 0:6] < 1) * (x[:, 0:6] >= 0) + (x[:, 0:6] >= 1)
     return x
-
 
 
 # NEEDS REFACTORING

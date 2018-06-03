@@ -3,6 +3,36 @@ from skimage.measure import compare_ssim as ssim
 from scipy.ndimage.measurements import center_of_mass
 
 
+def general_norm_1(i1, i2, mode=0):
+    """
+    Computes a norm, choosing it via parameters
+    mode =
+    0: MSE
+    1: MSE_centroid
+    2: MSE_centroid_colormeans
+    -1: MAE
+    -2: SSIM
+    :param i1: image 1
+    :param i2: image 2
+    :param mode: integer
+    :return: float.
+    """
+    if mode == 0:
+        return MSE(i1, i2)
+    elif mode == 1:
+        return MSE_w_Centroid(i1, i2)
+    elif mode == 2:
+        return MSE_centroid_colormeans(i1, i2)
+    elif mode == -1:
+        return MAE(i1, i2)
+    elif mode == -2:
+        return SSIM(i1, i2)
+    elif mode == -3:
+        return .5 * MSE(i1, i2) + .5 * SSIM(i1, i2)
+    else:
+        return MSE(i1, i2)
+
+
 def MAE(imageA, imageB):
     """
      # Error absoluto medio (Se asume que ambas imágenes tienen el mismo tamaño)

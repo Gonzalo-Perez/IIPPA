@@ -6,7 +6,7 @@ from measures import *
 N = 15
 
 if __name__ == "__main__":
-    img_objective = cv2.imread("Test_cases/circulos_coloridos.png")
+    img_objective = cv2.imread("Test_cases/blue_circle.png")
     img_objective = (img_objective / 255)
 
     cv2.namedWindow("Objetivo Simple")

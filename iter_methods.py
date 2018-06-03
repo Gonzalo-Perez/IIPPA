@@ -69,7 +69,7 @@ def simple_gradient_method(target_image, N, norm, step, max_iter, tol, _delta=.2
             imagen = draw_image_2(x_i, H, W)
             cv2.imshow("Objective", imagen)
             if it % 5 == 0:
-                cv2.imwrite('simple_grad_progress{}.png'.format(str(it)), np.array((imagen * 255), np.dtype(int)))
+                cv2.imwrite('iter_images/simple_grad_progress{}.png'.format(str(it)), np.array((imagen * 255), np.dtype(int)))
             cv2.waitKey(1)
 
         it += 1

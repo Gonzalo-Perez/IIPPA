@@ -27,6 +27,17 @@ def MSE(imageA, imageB):
     return err
 
 
+def SE(i1, i2):
+    """
+    Returns the Square error.
+    :param i1: image 1
+    :param i2: image 2
+    :return:
+    """
+    err = np.sum((i1.astype("float") - i2.astype("float")) ** 2)
+    return err
+
+
 def SSIM(i1, i2):
     """
     SSIM, 1 es best.

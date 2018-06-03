@@ -42,21 +42,22 @@ def partial_dif_2(i, _vars, _norm, _IMO, _N, _delta=.2, scheme='simple'):
     :return:
     """
     # if i % 10 >= 6: return 0
+    H, W = _IMO.shape[0], _IMO.shape[1]
     delta = _delta
     if scheme == 1:
-        images = draw_multi_image_2(_vars, i, (delta, -delta), _N)
+        images = draw_multi_image_2(_vars, H, W, i, (delta, -delta), _N)
         d1 = _norm(images[0], _IMO)
         d2 = _norm(images[1], _IMO)
         return (d1 - d2) / (2 * delta)
     elif scheme == 2:
-        images = draw_multi_image_2(_vars, i, (2 * delta, delta, -delta, -2 * delta), _N)
+        images = draw_multi_image_2(_vars, H, W, i, (2 * delta, delta, -delta, -2 * delta), _N)
         d1 = _norm(images[0], _IMO)
         d2 = _norm(images[1], _IMO)
         d3 = _norm(images[2], _IMO)
         d4 = _norm(images[3], _IMO)
         return ((8 * d2 + d4) - (8 * d3 + d1)) / (12 * delta)
     else:
-        images = draw_multi_image_2(_vars, i, (0, delta), _N)
+        images = draw_multi_image_2(_vars, H, W, i, (0, delta), _N)
         d1 = _norm(images[0], _IMO)
         d2 = _norm(images[1], _IMO)
         return (d2 - d1) / delta
@@ -75,9 +76,10 @@ def partial_dif_3(i, _vars, _norm, _IMO, _N, _delta=.2, scheme='simple'):
         :param scheme: int, {0,1,2} 0: simple  1: two points   2: Five-point stencil, other: simple
         :return:
         """
+    H, W = _IMO.shape[0], _IMO.shape[1]
     delta = _delta
     if scheme == 1:
-        images, window = draw_multi_image_2(_vars, i, (delta, -delta), _N, return_submatrix_coords=True)
+        images, window = draw_multi_image_2(_vars, H, W, i, (delta, -delta), _N, return_submatrix_coords=True)
         # numpy magic to get index for submatrix
         index = np.ix_(np.arange(window[0, 0], window[0, 1] + 1), np.arange(window[1, 0], window[1, 1] + 1), [0, 1, 2])
         im0 = images[0][index]
@@ -86,7 +88,7 @@ def partial_dif_3(i, _vars, _norm, _IMO, _N, _delta=.2, scheme='simple'):
         d2 = _norm(im1, _IMO)
         return (d1 - d2) / (2 * delta)
     elif scheme == 2:
-        images, window = draw_multi_image_2(_vars, i, (2 * delta, delta, -delta, -2 * delta),
+        images, window = draw_multi_image_2(_vars, H, W, i, (2 * delta, delta, -delta, -2 * delta),
                                             _N, return_submatrix_coords=True)
         # numpy magic to get index for submatrix
         index = np.ix_(np.arange(window[0, 0], window[0, 1] + 1), np.arange(window[1, 0], window[1, 1] + 1), [0, 1, 2])
@@ -96,7 +98,7 @@ def partial_dif_3(i, _vars, _norm, _IMO, _N, _delta=.2, scheme='simple'):
         d4 = _norm(images[3][index], _IMO)
         return ((8 * d2 + d4) - (8 * d3 + d1)) / (12 * delta)
     else:
-        images, window = draw_multi_image_2(_vars, i, (0, delta), _N, return_submatrix_coords=True)
+        images, window = draw_multi_image_2(_vars, H, W, i, (0, delta), _N, return_submatrix_coords=True)
         index = np.ix_(np.arange(window[0, 0], window[0, 1] + 1), np.arange(window[1, 0], window[1, 1] + 1), [0, 1, 2])
         d1 = _norm(images[0][index], _IMO)
         d2 = _norm(images[1][index], _IMO)

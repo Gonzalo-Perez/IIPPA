@@ -15,6 +15,13 @@ if __name__ == "__main__":
     cv2.imshow("Objetivo Simple", img_objective)
     cv2.waitKey(0)
 
+    from gradients import *
+    v = get_random_start_2(2,200,200)
+
+
+
+
+
     x = simple_gradient(img_objective, MSE, N, lambda n: .3 / np.log(np.e + n), 1000, 1e-9, _delta=.05,
                         diff_scheme_to_use=2, use_threads=False, show_progress=True)
     quit()

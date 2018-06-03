@@ -6,22 +6,6 @@ from gradients import *
 from draw import *
 
 
-def get_random_start_1(N,H,W):
-    """ USED INTEGERS FOR POSITIONS
-    Returns a random set of coordinates for the
-    :param seed: integer
-    :return: vars
-    """
-    vars = np.zeros((N, 10))
-    for i in range(N):
-        vars[i] = np.array([np.random.randint(0, W), np.random.randint(0, H),
-                            np.random.randint(0, W), np.random.randint(0, H),
-                            np.random.randint(0, W), np.random.randint(0, H),
-                            1, 1,
-                            1, 100])
-    return vars
-
-
 # LAST VERSION
 def get_random_start_2(N, H, W):
     """ USED DOUBLES FOR POSITIONS

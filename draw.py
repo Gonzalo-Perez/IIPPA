@@ -69,7 +69,7 @@ def draw_image_2(vars, H, W, background_color=(1., 1., 1.), background_alpha=.2)
     for i in range(N):
         vertex = np.array(vars[i][0:6])
         args = vertex, np.max(vars[i][-1], 0)
-        shape_matrix[:, :, i + 1] = triag_matrix_2(args[0], args[1])
+        shape_matrix[:, :, i + 1] = triag_matrix_2(args[0], args[1], H, W)
     shape_matrix[:, :, 0] = np.ones((H, W)) * background_alpha
 
     alpha_sum = np.sum(shape_matrix, axis=2)  # H,W dimension.
@@ -85,7 +85,8 @@ def draw_image_2(vars, H, W, background_color=(1., 1., 1.), background_alpha=.2)
 
 def draw_multi_image_2(vars, H, W, index, perturbations, background_color=(1., 1., 1.),
                        background_alpha=.2, return_submatrix_coords=False):
-    """ (there is more space for optimization if the kind of the perturbated variable is taken into account)
+    """ THE SUBMATRIX COORDS ARE NOT WORKING
+        (there is more space for optimization if the kind of the perturbated variable is taken into account)
         (there is more space for optimization if the submatrix coords take into account the channels)
     Renders N triangles with lineal combination of colors.
     Returns k images, where k is the length of 'perturbarions'
@@ -154,7 +155,7 @@ def draw_multi_image_2(vars, H, W, index, perturbations, background_color=(1., 1
         for i in range(3):  # Normalization
             outs[k][:, :, i] = (out[:, :, i] / a_sum)
     if return_submatrix_coords:
-        return outs, ((s_x, s_y), (e_x, e_y))
+        return outs, (s_x, e_x, s_y, e_y)
     else:
         return outs
 

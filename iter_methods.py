@@ -6,7 +6,6 @@ from gradients import *
 from draw import *
 
 
-# LAST VERSION
 def get_random_start_2(N, H, W):
     """ USED DOUBLES FOR POSITIONS
     Returns a random set of coordinates for the
@@ -32,8 +31,7 @@ def get_random_start_2(N, H, W):
     return vars
 
 
-### ALL ITERATIVE METHODS PENDING TO REFACTOR
-def simple_gradient(target_image, N, norm, step, max_iter, tol, _delta=.2, diff_scheme_to_use=0, use_threads=False,
+def simple_gradient_method(target_image, N, norm, step, max_iter, tol, _delta=.2, diff_scheme_to_use=0, use_threads=False,
                     show_progress=False):
     """
     Simple gradient descent
@@ -50,18 +48,17 @@ def simple_gradient(target_image, N, norm, step, max_iter, tol, _delta=.2, diff_
     """
     H = target_image.shape[0]
     W = target_image.shape[1]
-
-    x_i = get_random_start_2()
+    x_i = get_random_start_2(N, H, W)
     it = 0
     while it < max_iter:
         print('computing gradient...')
         tt = time.time()
-        grad = numerical_grad_2(x_i, norm, target_image, N, delta=_delta, _scheme=diff_scheme_to_use,
-                                parallel=use_threads)
+        grad = numerical_grad(x_i, norm, target_image, delta=_delta, _scheme=diff_scheme_to_use,
+                              parallel=use_threads)
         print("Iteration: {0}, Elapsed time: {1}".format(it, time.time() - tt))
         print("x: {0}".format(x_i))
         x_next = x_i - step(it) * grad
-        difference = norm(draw_image_2(x_i), target_image)
+        difference = norm(draw_image_2(x_i, H, W), target_image)
         print("Gradient: {0}".format(grad))
         print("Difference from target: {0}".format(difference))
         if difference < tol:
@@ -69,16 +66,17 @@ def simple_gradient(target_image, N, norm, step, max_iter, tol, _delta=.2, diff_
             break
         x_i = x_next
         if show_progress:
-            imagen = draw_image_2(x_i)
+            imagen = draw_image_2(x_i, H, W)
             cv2.imshow("Objective", imagen)
             if it % 5 == 0:
-                cv2.imwrite('pentagon_iteration{}.png'.format(str(it)), np.array((imagen * 255), np.dtype(int)))
+                cv2.imwrite('simple_grad_progress{}.png'.format(str(it)), np.array((imagen * 255), np.dtype(int)))
             cv2.waitKey(1)
 
         it += 1
     return x_i
 
 
+# NEEDS REFACTORING
 def accelerated_descent(target_image, norm, max_iter, tol):
     """
     :param target_image:
@@ -107,6 +105,7 @@ def accelerated_descent(target_image, norm, max_iter, tol):
     return x_i
 
 
+# NEEDS REFACTORING
 def greedy_descent(target_image, norm, step, max_iter, tol):
     """ WE SHOULD IMPLEMENT A LINESEARCH FOR THE CHOOSEN COORDINATE
     greedy coordinate descent.
@@ -139,4 +138,3 @@ def greedy_descent(target_image, norm, step, max_iter, tol):
         cv2.waitKey(1)
         it += 1
     return x_i
-

@@ -70,7 +70,6 @@ def partial_dif_2_1(i, _vars, norm_mode, _IMO, _delta=.2, scheme=0):
         return (d2 - d1) / delta
 
 
-
 def partial_dif_3(i, _vars, _norm, _IMO, _delta=.2, scheme=0):
     """ INTENDED FOR CONTINIUS VARIABLES
         Numerical Partial derivative. Implements the idea of the "warm start". ie it will only calculate the
@@ -172,7 +171,7 @@ def numerical_grad_2(vars, norm_mode, IMO, delta=.2, _scheme=0, parallel=True):
     :param vars: vars from which to evaluate
     :param norm_mode: integer, norm to consider de difference
     :param IMO: Objective image
-    :param N: number of triangles
+    :param delta: step for the numerical differentiation
     :param _scheme: argument to pass to the partial differentiation method (integer)
     :param parallel: boolean, use parallelization
     :return: array, gradient
@@ -188,6 +187,42 @@ def numerical_grad_2(vars, norm_mode, IMO, delta=.2, _scheme=0, parallel=True):
     grad = np.asarray(grad)
     grad.shape = N, 10
     return grad
+
+
+def num_stochastic_grad(vars, norm_mode, IMO, ratio_computed=.2, hard_max=-1, delta=.2, _scheme=0, parallel=True):
+    """
+    Computes a simple numeric stochastic gradient. Each call picks randomly Num_vars*ratio_computed vars to compute.
+    The others are set to zero.
+    :param vars: vars value to compute gradient
+    :param norm_mode: norm arg to be passed
+    :param IMO: objective image.
+    :param ratio_computed: percentage of total variables to compute.
+    :param hard_max: max num of directions to compute.
+    :param delta: step for the numerical differentiation
+    :param _scheme: integer, scheme type for the numerical differentiation
+    :param parallel: bool, true for parallelization
+    :return:
+    """
+    num_vars = len(np.ravel(vars))
+    if hard_max > 0:
+        size = np.min((round(num_vars * ratio_computed), hard_max))
+    else:
+        size = round(num_vars * ratio_computed)
+    choice = np.sort(np.random.choice(np.arange(num_vars), size, False))
+
+    N = len(vars)
+    grad = np.zeros(num_vars)
+    if parallel:
+        with mp.Pool() as p:
+            grad[choice] = p.starmap(partial_dif_2_1,
+                                     [(i, vars, norm_mode, IMO, delta, _scheme) for i in choice])
+    else:
+        grad[choice] = np.asarray([partial_dif_2_1
+                                   (i, vars, norm_mode, IMO, _delta=delta, scheme=_scheme) for i in choice])
+    grad = np.asarray(grad)
+    grad.shape = N, 10
+    return grad
+    pass
 
 
 def grad_warm_start(vars, norm, IMO, delta=.2, scheme=0, parallel=False):

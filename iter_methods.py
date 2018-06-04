@@ -163,6 +163,86 @@ def simple_gradient_method_parallel(target_image, N, norm_mode, step, max_iter, 
     return x_i
 
 
+def sim_grad_stochastic_parallel(target_image, N, norm_mode, stoc_ratio, v_max, linesearch_num_steps,
+                                 linesearch_step_size, max_iter, tol, _delta=.2, diff_scheme_to_use=0, use_threads=True,
+                                 show_progress=False):
+    """
+    Simple implementation of stochastic gradient descent. Performs linesearch to get the best point.
+    :param target_image:
+    :param N:
+    :param norm_mode:
+    :param step:
+    :param stoc_ratio:
+    :param v_max:
+    :param linesearch_num_steps:
+    :param linesearch_step_size:
+    :param max_iter:
+    :param tol:
+    :param _delta:
+    :param diff_scheme_to_use:
+    :param use_threads:
+    :param show_progress:
+    :return:
+    """
+    H = target_image.shape[0]
+    W = target_image.shape[1]
+    x_i = get_random_start_2(N)
+    # x_i = get_red_random_start_2(N)
+    it = 0
+    while it < max_iter:
+        print('computing gradient...')
+        tt = time.time()
+        grad = num_stochastic_grad(x_i, norm_mode, target_image, ratio_computed=stoc_ratio, hard_max=v_max,
+                                   delta=_delta, _scheme=diff_scheme_to_use, parallel=use_threads)
+        print("Iteration: {0}, Elapsed time: {1}".format(it, time.time() - tt))
+        # x_next = update_x(x_i, grad, step(it), color_boundaries=True, vertex_boundaries=False)
+        x_next = simple_line_search(target_image, H, W, norm_mode, x_i, grad,
+                                    linesearch_num_steps, linesearch_step_size)
+        difference = general_norm_1(draw_image_2(x_i, H, W), target_image, norm_mode)
+        # print('Gradient:')
+        # for i in range(10):
+        #     if i <= 5:
+        #         print('vertex:', grad[:, i])
+        #     else:
+        #         print('color:', grad[:, i])
+        print("Difference from target: {0}".format(difference))
+        if difference < tol:
+            x_i = x_next
+            break
+        x_i = x_next
+        if show_progress:
+            imagen = draw_image_2(x_i, H, W)
+            cv2.imshow("Objective", imagen)
+            if it % 5 == 0:
+                cv2.imwrite('iter_images/stoc_grad_progress{}.png'.format(str(it)),
+                            np.array((imagen * 255), np.dtype(int)))
+            cv2.waitKey(1)
+        it += 1
+    return x_i
+
+
+def simple_line_search(target_image, H, W, norm_mode, vars, grad, num_steps, step_size):
+    """
+    Simple line search in a direction. Returns the best variables.
+    :param target_image: Image to test against
+    :param H: image dim
+    :param W: image dim
+    :param norm_mode: norm to consider. must be threads friendly
+    :param vars: initial vars
+    :param grad: direction to test
+    :param num_steps: integer, number of steps
+    :param step_size: float, size of the steps
+    :return: array, best variables.
+    """
+    v = [update_x(vars, grad, step_size * i) for i in range(num_steps + 1)]
+    with mp.Pool() as p:
+        imgs = p.starmap(draw_image_2, [(v[i], H, W) for i in range(num_steps + 1)])
+    with mp.Pool() as p:
+        diffs = p.starmap(general_norm_1, [(target_image, imgs[i], norm_mode) for i in range(num_steps + 1)])
+    best = np.argmin(diffs)
+    return v[best]
+
+
 def update_x(x_i, grad, step, color_boundaries=True, vertex_boundaries=False):
     """
     returns the updated x_i, checks and corrects boundaries of color and vertex positions.

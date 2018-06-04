@@ -58,8 +58,7 @@ def get_red_random_start_2(N):
 
 
 def simple_gradient_method(target_image, N, norm, step, max_iter, tol, _delta=.2, diff_scheme_to_use=0,
-                           use_threads=False,
-                           show_progress=False):
+                           use_threads=False, show_progress=False):
     """
     Simple gradient descent
     :param target_image: image to adjust. must have float colors
@@ -223,7 +222,8 @@ def sim_grad_stochastic_parallel(target_image, N, norm_mode, stoc_ratio, v_max, 
 
 def simple_line_search(target_image, H, W, norm_mode, vars, grad, num_steps, step_size):
     """
-    Simple line search in a direction. Returns the best variables.
+    Simple line search in a direction. Checks "num_steps" times by advancing grad * step_size
+    Returns the best variables.
     :param target_image: Image to test against
     :param H: image dim
     :param W: image dim
@@ -246,12 +246,12 @@ def simple_line_search(target_image, H, W, norm_mode, vars, grad, num_steps, ste
 def update_x(x_i, grad, step, color_boundaries=True, vertex_boundaries=False):
     """
     returns the updated x_i, checks and corrects boundaries of color and vertex positions.
-    :param x_i: 
-    :param grad: 
-    :param step: 
-    :param color_boundaries: 
-    :param vertex_boundaries: 
-    :return: 
+    :param x_i: Nx10 array, old state
+    :param grad: gradient
+    :param step: float, step
+    :param color_boundaries: bool
+    :param vertex_boundaries: bool
+    :return: array, new state
     """
     x = x_i - step * grad
     # check alpha positive

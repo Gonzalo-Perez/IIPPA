@@ -62,6 +62,10 @@ def draw_image_2(vars, H, W, background_color=(1., 1., 1.), background_alpha=.05
     :param vars: N, 10 array. (x1,y1,x2,y2,x3,y3,r,g,b,a)
     r,g,b: doubles
     x_i,y_i: integers (will be rounded)
+    :param H: image dimensions
+    :param W: image dimensions
+    :param background_color:
+    :param background_alpha:
     :return: H,W,3 matrix
     """
     N = len(vars)
@@ -147,8 +151,6 @@ def draw_multi_image_2(vars, H, W, index, perturbations, background_color=(1., 1
             if e_y > y_max:
                 e_y = y_max
         a_sum = alpha_sum + lay
-        if np.min(a_sum) <= 0:
-            print('Problem!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
         lay.shape = H, W, 1
         col = np.asarray(u[6:9])
         col = col * (col >= 0) * (col < 1) + (col >= 1) # Colors must be between 0 and 1.

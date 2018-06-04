@@ -42,9 +42,8 @@ def partial_dif_2_1(i, _vars, norm_mode, _IMO, _delta=.2, scheme=0):
     Numerical Partial derivative, build for parallelization.
     :param i: integer, coordinate
     :param _vars: N,10 arraythe variables from which to evaluate de function
-    :param _norm: function, the norm used to compute de difference
+    :param norm_mode: integer, the norm used to compute de difference
     :param _IMO: H,W array, objective image
-    :param _N: integer, global parameter, number of shapes used
     :param _delta: float, step for the differentiation
     :param scheme: int, {0,1,2} 0: simple  1: two points   2: Five-point stencil, other: simple
     :return:
@@ -70,7 +69,7 @@ def partial_dif_2_1(i, _vars, norm_mode, _IMO, _delta=.2, scheme=0):
         return (d2 - d1) / delta
 
 
-def partial_dif_3(i, _vars, _norm, _IMO, _delta=.2, scheme=0):
+def partial_dif_warm_start(i, _vars, _norm, _IMO, _delta=.2, scheme=0):
     """ INTENDED FOR CONTINIUS VARIABLES
         Numerical Partial derivative. Implements the idea of the "warm start". ie it will only calculate the
         difference in the part of the image that is changing.
@@ -141,32 +140,26 @@ def get_diff_window(i1, i2):
     return x_0, x_1, y_0, y_1
 
 
-def numerical_grad(vars, norm, IMO, delta=.2, _scheme=0, parallel=False):
+def numerical_grad(vars, norm, IMO, delta=.2, _scheme=0):
     """
     Returns the gradient computed numerically, considering the passed norm
     :param vars: vars from which to evaluate
     :param norm: norm to consider the difference
     :param IMO: Objective image
-    :param N: number of triangles
-    :param scheme: argument to pass to the partial differentiation method (integer)
-    :param parallel: boolean, use parallelization
+    :param delta: step of the numerical derivative.
+    :param _scheme: argument to pass to the partial differentiation method (integer)
     :return: array, gradient
     """
     N = len(vars)
-    if parallel:
-        with mp.Pool() as p:
-            grad = p.starmap(partial_dif_2,
-                             [(i, vars, norm, IMO, delta, _scheme) for i in range(len(np.ravel(vars)))])
-    else:
-        grad = np.asarray([partial_dif_2
-                           (i, vars, norm, IMO, _delta=delta, scheme=_scheme) for i in range(len(np.ravel(vars)))])
+    grad = np.asarray([partial_dif_2
+                       (i, vars, norm, IMO, _delta=delta, scheme=_scheme) for i in range(len(np.ravel(vars)))])
     grad = np.asarray(grad)
     grad.shape = N, 10
     return grad
 
 
 def numerical_grad_2(vars, norm_mode, IMO, delta=.2, _scheme=0, parallel=True):
-    """
+    """ Fixed for parallelization
     Returns the gradient computed numerically, considering the passed norm
     :param vars: vars from which to evaluate
     :param norm_mode: integer, norm to consider de difference
@@ -209,7 +202,6 @@ def num_stochastic_grad(vars, norm_mode, IMO, ratio_computed=.2, hard_max=-1, de
     else:
         size = round(num_vars * ratio_computed)
     choice = np.sort(np.random.choice(np.arange(num_vars), size, False))
-
     N = len(vars)
     grad = np.zeros(num_vars)
     if parallel:
@@ -226,7 +218,7 @@ def num_stochastic_grad(vars, norm_mode, IMO, ratio_computed=.2, hard_max=-1, de
 
 
 def grad_warm_start(vars, norm, IMO, delta=.2, scheme=0, parallel=False):
-    """
+    """ This needs atention to work well. other norms can be modified to be compatible.
     Returns the gradient computed numerically. The norm MUST be a SE-like. ie: must be a sum of a function(p1_i,p2_i),
     that being that only considers pixels locally. even the normalization of MSE breaks the optimization.
     :param vars:
@@ -239,10 +231,10 @@ def grad_warm_start(vars, norm, IMO, delta=.2, scheme=0, parallel=False):
     N = len(vars)
     if parallel:
         with mp.Pool() as p:
-            grad = p.starmap(partial_dif_3,
+            grad = p.starmap(partial_dif_warm_start,
                              [(i, vars, norm, IMO, delta, scheme) for i in range(len(np.ravel(vars)))])
     else:
-        grad = np.asarray([partial_dif_3
+        grad = np.asarray([partial_dif_warm_start
                            (i, vars, norm, IMO, _delta=delta, scheme=scheme) for i in range(len(np.ravel(vars)))])
     grad = np.asarray(grad)
     grad.shape = N, 10

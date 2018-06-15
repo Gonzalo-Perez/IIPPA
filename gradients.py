@@ -182,7 +182,8 @@ def numerical_grad_2(vars, norm_mode, IMO, delta=.2, _scheme=0, parallel=True):
     return grad
 
 
-def num_stochastic_grad(vars, norm_mode, IMO, ratio_computed=.2, hard_max=-1, delta=.2, _scheme=0, parallel=True):
+def num_stochastic_grad(vars, norm_mode, IMO, ratio_computed=.2, hard_max=-1, delta=.2, _scheme=0, parallel=True,
+                        choose_triags=False):
     """
     Computes a simple numeric stochastic gradient. Each call picks randomly Num_vars*ratio_computed vars to compute.
     The others are set to zero.
@@ -194,14 +195,24 @@ def num_stochastic_grad(vars, norm_mode, IMO, ratio_computed=.2, hard_max=-1, de
     :param delta: step for the numerical differentiation
     :param _scheme: integer, scheme type for the numerical differentiation
     :param parallel: bool, true for parallelization
+    :param choose_triags: bool, if true whole triangles are choosen instead of individual variables.
     :return:
     """
     num_vars = len(np.ravel(vars))
-    if hard_max > 0:
-        size = np.min((round(num_vars * ratio_computed), hard_max))
+    if choose_triags:
+        num_triags = len(vars)
+        if hard_max > 0:
+            size = int(np.min((np.ceil(num_triags * ratio_computed), hard_max)))
+        else:
+            size = int(np.ceil(num_triags * ratio_computed))
+        triag_choice = np.sort(np.random.choice(np.arange(num_triags), size, False))
+        choice = np.array([10 * i + j for i in triag_choice for j in range(10)])
     else:
-        size = round(num_vars * ratio_computed)
-    choice = np.sort(np.random.choice(np.arange(num_vars), size, False))
+        if hard_max > 0:
+            size = np.min((round(num_vars * ratio_computed), hard_max))
+        else:
+            size = round(num_vars * ratio_computed)
+        choice = np.sort(np.random.choice(np.arange(num_vars), size, False))
     N = len(vars)
     grad = np.zeros(num_vars)
     if parallel:
@@ -214,7 +225,6 @@ def num_stochastic_grad(vars, norm_mode, IMO, ratio_computed=.2, hard_max=-1, de
     grad = np.asarray(grad)
     grad.shape = N, 10
     return grad
-    pass
 
 
 def grad_warm_start(vars, norm, IMO, delta=.2, scheme=0, parallel=False):

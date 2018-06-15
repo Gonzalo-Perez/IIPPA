@@ -11,7 +11,8 @@ def general_norm_1(i1, i2, mode=0):
     1: MSE_centroid
     2: MSE_centroid_colormeans
     -1: MAE
-    -2: SSIM
+    -2: MRE
+    -3: SSIM
     :param i1: image 1
     :param i2: image 2
     :param mode: integer
@@ -26,8 +27,10 @@ def general_norm_1(i1, i2, mode=0):
     elif mode == -1:
         return MAE(i1, i2)
     elif mode == -2:
-        return SSIM(i1, i2)
+        return MRE(i1, i2)
     elif mode == -3:
+        return SSIM(i1, i2)
+    elif mode == -4:
         return .5 * MSE(i1, i2) + .5 * SSIM(i1, i2)
     else:
         return MSE(i1, i2)
@@ -54,6 +57,18 @@ def MSE(imageA, imageB):
     """
     err = np.sum((imageA.astype("float") - imageB.astype("float")) ** 2)
     err /= float(imageA.shape[0] * imageA.shape[1])
+    return err
+
+
+def MRE(i1, i2):
+    """
+    Computes the mean root error.
+    :param i1: image 1
+    :param i2: image 2
+    :return: non negative float
+    """
+    err = np.sum(np.sqrt(np.abs(i1.astype("float") - i2.astype("float"))))
+    err /= float(i1.shape[0] * i2.shape[1])
     return err
 
 
@@ -193,3 +208,16 @@ def get_baricenter_from_image(img):
     v3 = center_of_mass(c3)
     out = np.stack((v1, v2, v3), axis=0)
     return out
+
+
+def get_area_of_triangle(v):
+    """
+    Returns the area of a triangle. Computed via determinant.
+    Given that the variables are floats between 0 and 1, the max area is 0.5
+    :param v: v = (x1,y2,x2,y2,x3,y3)
+    :return:
+    """
+    matrix = np.ones((3, 3))
+    matrix[0] = v[np.array((0, 2, 4))]
+    matrix[1] = v[np.array((1, 3, 5))]
+    return 0.5 * np.linalg.det(matrix)

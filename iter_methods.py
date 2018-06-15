@@ -4,7 +4,7 @@ import time
 
 from gradients import *
 from draw import *
-from measures import general_norm_1
+from measures import general_norm_1, get_area_of_triangle
 
 
 def get_random_start_2(N):
@@ -130,6 +130,7 @@ def simple_gradient_method_parallel(target_image, N, norm_mode, step, max_iter, 
     x_i = get_random_start_2(N)
     # x_i = get_red_random_start_2(N)
     it = 0
+    objective = []
     while it < max_iter:
         print('computing gradient...')
         tt = time.time()
@@ -147,6 +148,7 @@ def simple_gradient_method_parallel(target_image, N, norm_mode, step, max_iter, 
             else:
                 print('color:', grad[:, i])
         print("Difference from target: {0}".format(difference))
+        objective.append(difference)
         if difference < tol:
             x_i = x_next
             break
@@ -159,14 +161,18 @@ def simple_gradient_method_parallel(target_image, N, norm_mode, step, max_iter, 
                             np.array((imagen * 255), np.dtype(int)))
             cv2.waitKey(1)
         it += 1
+    np.save('iter_vars/simple_grad_obj_function.npy', objective)
     return x_i
 
 
-def sim_grad_stochastic_parallel(target_image, N, norm_mode, stoc_ratio, v_max, linesearch_num_steps,
-                                 linesearch_step_size, max_iter, tol, _delta=.2, diff_scheme_to_use=0, use_threads=True,
-                                 show_progress=False):
+def sim_grad_stochastic_parallel(target_image, N, norm_mode, initial_x='', stoc_ratio=.1, v_max=100,
+                                 linesearch_num_steps=20, linesearch_step_size=.5, max_iter=2000, tol=1e-4, _delta=.2,
+                                 diff_scheme_to_use=0, null_triag_correction=False, steps_tolerance=2,
+                                 triag_area_tol=.01, use_threads=True, show_progress=False, choose_triags=False):
     """
     Simple implementation of stochastic gradient descent. Performs linesearch to get the best point.
+    If method gets stuck, randomizes small triangles. The stochastic part of the gradient is simply to choose
+    a part of the variables (or triangles) to perform the partial derivates. The rest are set to zero.
     :param target_image:
     :param N:
     :param norm_mode:
@@ -179,25 +185,36 @@ def sim_grad_stochastic_parallel(target_image, N, norm_mode, stoc_ratio, v_max, 
     :param tol:
     :param _delta:
     :param diff_scheme_to_use:
+    :param null_triag_correction: boolean
+    :param steps_tolerance: integer
+    :param triag_area_tol: float, tolerance to randomize triangle.
     :param use_threads:
     :param show_progress:
     :return:
     """
     H = target_image.shape[0]
     W = target_image.shape[1]
-    x_i = get_random_start_2(N)
-    # x_i = get_red_random_start_2(N)
+    if initial_x == '':
+        x_i = get_random_start_2(N)
+    else:
+        x_i = np.load(initial_x)
     it = 0
+    stuck_counter = 0
+    objective = []
     while it < max_iter:
         print('computing gradient...')
         tt = time.time()
         grad = num_stochastic_grad(x_i, norm_mode, target_image, ratio_computed=stoc_ratio, hard_max=v_max,
-                                   delta=_delta, _scheme=diff_scheme_to_use, parallel=use_threads)
-        print("Iteration: {0}, Elapsed time: {1}".format(it, time.time() - tt))
+                                   delta=_delta, _scheme=diff_scheme_to_use, parallel=use_threads,
+                                   choose_triags=choose_triags)
+        print('Gradient time: {}'.format(time.time() - tt))
+        ttt = time.time()
         # x_next = update_x(x_i, grad, step(it), color_boundaries=True, vertex_boundaries=False)
         x_next = simple_line_search(target_image, H, W, norm_mode, x_i, grad,
                                     linesearch_num_steps, linesearch_step_size)
         difference = general_norm_1(draw_image_2(x_i, H, W), target_image, norm_mode)
+        print('Linesearch time: {}'.format(time.time() - ttt))
+        print("Iteration: {0}, Elapsed time: {1}".format(it, time.time() - tt))
         # print('Gradient:')
         # for i in range(10):
         #     if i <= 5:
@@ -205,9 +222,18 @@ def sim_grad_stochastic_parallel(target_image, N, norm_mode, stoc_ratio, v_max, 
         #     else:
         #         print('color:', grad[:, i])
         print("Difference from target: {0}".format(difference))
+        objective.append(difference)
         if difference < tol:
             x_i = x_next
             break
+        if null_triag_correction:
+            if np.count_nonzero(x_i != x_next) == 0:
+                stuck_counter += 1
+                if stuck_counter >= steps_tolerance:
+                    x_next = randomize_null_triags(x_next, triag_area_tol)
+                    stuck_counter = 0
+            else:
+                stuck_counter = 0
         x_i = x_next
         if show_progress:
             imagen = draw_image_2(x_i, H, W)
@@ -215,8 +241,11 @@ def sim_grad_stochastic_parallel(target_image, N, norm_mode, stoc_ratio, v_max, 
             if it % 5 == 0:
                 cv2.imwrite('iter_images/stoc_grad_progress{}.png'.format(str(it)),
                             np.array((imagen * 255), np.dtype(int)))
+            if it % 50 == 0:
+                np.save('iter_vars/stoc_grad_vars{}.npy'.format(str(it)), x_i)
             cv2.waitKey(1)
         it += 1
+    np.save('iter_vars/stoc_grad_obj_func.npy', objective)
     return x_i
 
 
@@ -261,6 +290,27 @@ def update_x(x_i, grad, step, color_boundaries=True, vertex_boundaries=False):
     if vertex_boundaries:
         x[:, 0:6] = x[:, 0:6] * (x[:, 0:6] < 1) * (x[:, 0:6] >= 0) + (x[:, 0:6] >= 1)
     return x
+
+
+def randomize_null_triags(v, tolerance=.005):
+    """
+    Checks the set of variables defining triangles and randomizes the triangles with an area below tolerance.
+    :param v: array N,10. variables
+    :param tolerance: float. tolerance for small triangles.
+    :return: array, modified variables.
+    """
+    for i in range(len(v)):
+        triag = v[i][0:6]
+        if get_area_of_triangle(triag) < tolerance:
+            v[i] += np.random.uniform(-.1, .1, 10)
+            # v[i] += 0.5 * np.array([np.random.uniform(-0.1,0.1), np.random.uniform(-0.1,0.1),
+            #                   np.random.uniform(-0.1,0.1), np.random.uniform(-0.1,0.1),
+            #                   np.random.uniform(-0.1,0.1), np.random.uniform(-0.1,0.1),
+            #                   np.random.uniform(-0.1,0.1),  # blue
+            #                   np.random.uniform(-0.1,0.1),  # green
+            #                   np.random.uniform(-0.1,0.1),  # red
+            #                   np.random.uniform(-0.1,0.1)])
+    return v
 
 
 # NEEDS REFACTORING

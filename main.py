@@ -65,6 +65,56 @@ tiene bugs, se utilizó una comparación "a la bruta" en el intertanto.
 """
 
 if __name__ == "__main__":
+
+    # pruebas varias.
+    H, W = 100, 50
+    from draw import *
+    from gradients import *
+
+    i1 = np.ones((H, W, 3), dtype=float) * .3
+    i2 = np.ones((H, W, 3), dtype=float) * .7
+
+    i3 = np.ones((200, 100, 3), dtype=float) * .3
+    i4 = np.ones((200, 100, 3), dtype=float) * .7
+
+    t1 = time.time()
+    for i in range(10000):
+        u = MSE(i1, i2)
+    print(time.time() - t1)
+
+    t2 = time.time()
+    for i in range(10000):
+        u = MSE(i3, i4)
+    print(time.time() - t2)
+    quit()
+
+    V = []
+    I = []
+    IM = []
+    np.ones((H, W, 3), dtype=float)
+    for i in range(1000):
+        V.append(get_random_start_2(50))
+        I.append(np.random.randint(0, 500))
+        i1, i2 = draw_multi_image_2(V[i], H, W, I[i], (-.1, .1))
+        IM.append((i1, i2))
+    t1 = time.time()
+    for i in range(1000):
+        u = get_diff_window(IM[i][0], IM[i][1])
+        MSE()
+    print('first method time:', time.time() - t1)
+
+    t2 = time.time()
+    for i in range(1000):
+        u = get_diff_window_efficiently_triags(V[i], I[i], (-.1, .1), H, W)
+    print('second method time:', time.time() - t2)
+    quit()
+
+    i1, i2 = draw_multi_image_2(v, H, W, index, (-.1, .1))
+    print(get_diff_window(i1, i2))
+    print(get_diff_window_efficiently_triags(v, index, (-.1, .1), H, W))
+
+    quit()
+
     img_objective = cv2.imread("Test_cases/blue_circle.png")
     img_objective = (img_objective / 255)
     np.random.seed(1235)

@@ -69,19 +69,19 @@ def partial_dif_2_1(i, _vars, norm_mode, _IMO, _delta=.2, scheme=0):
         return (d2 - d1) / delta
 
 
-def partial_dif_warm_start(i, _vars, _norm, _IMO, _delta=.2, scheme=0):
+def partial_dif_warm_start(i, _vars, norm_mode, _IMO, _delta=.2, scheme=0):
     """ INTENDED FOR CONTINIUS VARIABLES
-        Numerical Partial derivative. Implements the idea of the "warm start". ie it will only calculate the
-        difference in the part of the image that is changing.
-        :param i: integer, coordinate
-        :param _vars: N,10 arraythe variables from which to evaluate de function
-        :param _norm: function, the norm used to compute de difference
-        :param _IMO: H,W array, objective image
-        :param _N: integer, global parameter, number of shapes used
-        :param _delta: float, step for the differentiation
-        :param scheme: int, {0,1,2} 0: simple  1: two points   2: Five-point stencil, other: simple
-        :return:
-        """
+    Numerical Partial derivative. Implements the idea of the "warm start". ie it will only calculate the
+    difference in the part of the image that is changing.
+    :param i: integer, coordinate
+    :param _vars: N,10 arraythe variables from which to evaluate de function
+    :param norm_mode: integer, the norm used to compute de difference
+    :param _IMO: H,W array, objective image
+    :param _N: integer, global parameter, number of shapes used
+    :param _delta: float, step for the differentiation
+    :param scheme: int, {0,1,2} 0: simple  1: two points   2: Five-point stencil, other: simple
+    :return:
+    """
     H, W = _IMO.shape[0], _IMO.shape[1]
     delta = _delta
     if scheme == 1:
@@ -91,8 +91,9 @@ def partial_dif_warm_start(i, _vars, _norm, _IMO, _delta=.2, scheme=0):
         index = np.ix_(np.arange(window[0], window[1] + 1), np.arange(window[2], window[3] + 1), [0, 1, 2])
         im0 = images[0][index]
         im1 = images[1][index]
-        d1 = _norm(im0, _IMO)
-        d2 = _norm(im1, _IMO)
+        O = _IMO[index]
+        d1 = general_norm_ws(im0, O, H, W, norm_mode)
+        d2 = general_norm_ws(im1, O, H, W, norm_mode)
         return (d1 - d2) / (2 * delta)
     elif scheme == 2:
         images = draw_multi_image_2(_vars, H, W, i, (2 * delta, delta, -delta, -2 * delta))
@@ -103,27 +104,32 @@ def partial_dif_warm_start(i, _vars, _norm, _IMO, _delta=.2, scheme=0):
         window = np.min((w1[0], w2[0], w3[0])), np.max((w1[1], w2[1], w3[1])), \
                  np.min((w1[2], w2[2], w3[2])), np.max((w1[3], w2[3], w3[3]))
         # numpy magic to get index for submatrix
-        index = np.ix_(np.arange(window[0], window[1] + 1), np.arange(window[2], window[3] + 1), [0, 1, 2])
-        d1 = _norm(images[0][index], _IMO)
-        d2 = _norm(images[1][index], _IMO)
-        d3 = _norm(images[2][index], _IMO)
-        d4 = _norm(images[3][index], _IMO)
+        index = np.ix_((0, 1, 2, 3), np.arange(window[0], window[1] + 1), np.arange(window[2], window[3] + 1),
+                       [0, 1, 2])
+        i_IMO = np.ix_(np.arange(window[0], window[1] + 1), np.arange(window[2], window[3] + 1), [0, 1, 2])
+        ims = images[index]
+        O = _IMO[i_IMO]
+        d1 = general_norm_ws(ims[0], O, H, W, norm_mode)
+        d2 = general_norm_ws(ims[1], O, H, W, norm_mode)
+        d3 = general_norm_ws(ims[2], O, H, W, norm_mode)
+        d4 = general_norm_ws(ims[3], O, H, W, norm_mode)
         return ((8 * d2 + d4) - (8 * d3 + d1)) / (12 * delta)
     else:
         images = draw_multi_image_2(_vars, H, W, i, (0, delta))
         window = get_diff_window(images[0], images[1])
         # numpy magic to get index for submatrix
         index = np.ix_(np.arange(window[0], window[1] + 1), np.arange(window[2], window[3] + 1), [0, 1, 2])
-        i1 = images[0][index]
-        i2 = images[1][index]
-        d1 = _norm(i1, _IMO[index])
-        d2 = _norm(i2, _IMO[index])
+        im0 = images[0][index]
+        im1 = images[1][index]
+        O = _IMO[index]
+        d1 = general_norm_ws(im0, O, H, W, norm_mode)
+        d2 = general_norm_ws(im1, O, H, W, norm_mode)
         return (d2 - d1) / delta
     pass
 
 
 def get_diff_window(i1, i2):
-    """
+    """ (mind the reversed names of x,y)
     Returns the start and end of the window where to images are different.
     Expects H,W,3 images.
     :param i1:
@@ -137,7 +143,55 @@ def get_diff_window(i1, i2):
     x_1 = np.max(x)
     y_0 = np.min(y)
     y_1 = np.max(y)
-    return x_0, x_1, y_0, y_1
+    return y_0, y_1, x_0, x_1
+
+
+def get_diff_window_efficiently_triags(vars, i, deltas, H, W):
+    """
+    CONSIDERS ONLY STANDARD PARAMETRIZATION OF TRIANGLES.
+    Returns the window in which the perturbation of the variable matters without drawing the image.
+    Note that the windows computed with this method and the above one are sometimes different.
+    This one is always a little bigger.
+    :param vars: set of variables for triangles
+    :param i: index of variable to perturbate
+    :param deltas: array of perturbations for vars[i]
+    :param H: Height
+    :param W: width
+    :return: x_min, x_max, y_min, y_max
+    """
+    i_triag = i // 10
+    v = vars[i_triag]  # afected triangle variables.
+    if i % 10 < 6:
+        j = i % 10
+        if j % 2 == 0:
+            M = len(deltas)
+            x1 = np.ones(M, dtype=float) * v[0] + (j == 0) * np.array(deltas)
+            x2 = np.ones(M, dtype=float) * v[2] + (j == 2) * np.array(deltas)
+            x3 = np.ones(M, dtype=float) * v[4] + (j == 4) * np.array(deltas)
+            y1, y2, y3 = v[1], v[3], v[5]
+        else:
+            M = len(deltas)
+            x1, x2, x3 = v[0], v[2], v[4]
+            y1 = np.ones(M, dtype=float) * v[1] + (j == 1) * np.array(deltas)
+            y2 = np.ones(M, dtype=float) * v[3] + (j == 3) * np.array(deltas)
+            y3 = np.ones(M, dtype=float) * v[5] + (j == 5) * np.array(deltas)
+        x_min = np.min(np.array((x1, x2, x3)) * W).astype(int)
+        x_max = np.max(np.array((x1, x2, x3)) * W).astype(int)
+        y_min = np.min(np.array((y1, y2, y3)) * H).astype(int)
+        y_max = np.max(np.array((y1, y2, y3)) * H).astype(int)
+        pass
+    else:
+        # Color change.
+        x_min = np.min((int(v[0] * W), int(v[2] * W), int(v[4] * W)))
+        x_max = np.max((int(v[0] * W), int(v[2] * W), int(v[4] * W)))
+        y_min = np.min((int(v[1] * H), int(v[3] * H), int(v[5] * H)))
+        y_max = np.max((int(v[1] * H), int(v[3] * H), int(v[5] * H)))
+        pass
+    x_min = np.max((0, x_min))
+    x_max = np.min((W, x_max))
+    y_min = np.max((0, y_min))
+    y_max = np.min((H, y_max))
+    return x_min, x_max, y_min, y_max
 
 
 def numerical_grad(vars, norm, IMO, delta=.2, _scheme=0):

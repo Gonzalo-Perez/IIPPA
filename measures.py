@@ -36,6 +36,28 @@ def general_norm_1(i1, i2, mode=0):
         return MSE(i1, i2)
 
 
+def general_norm_ws(i1, i2, h, w, mode=0):
+    """
+    Computes a norm for warm start, choosing it via parameters.
+    CURRENTLLY ONLY: 0,-2
+    mode =
+    0: MSE_ws
+    1: MSE_centroid
+    2: MSE_centroid_colormeans
+    -1: MAE
+    -2: MRE_ws
+    -3: SSIM
+    :param i1: image 1
+    :param i2: image 2
+    :param mode: integer
+    :return: float.
+    """
+    if mode == -2:
+        return MRE_ws(i1, i2, h, w)
+    else:
+        return MSE_ws(i1, i2, h, w)
+
+
 def MAE(imageA, imageB):
     """
      # Error absoluto medio (Se asume que ambas imágenes tienen el mismo tamaño)
@@ -60,6 +82,20 @@ def MSE(imageA, imageB):
     return err
 
 
+def MSE_ws(i1, i2, h, w):
+    """
+    Mean square error, recives h,w as dimensions, to work with the warm start.
+    :param i1: image 1
+    :param i2: image 2
+    :param h: height
+    :param w: width
+    :return:
+    """
+    err = np.sum((i1.astype("float") - i2.astype("float")) ** 2)
+    err /= float(h * w)
+    return err
+
+
 def MRE(i1, i2):
     """
     Computes the mean root error.
@@ -69,6 +105,20 @@ def MRE(i1, i2):
     """
     err = np.sum(np.sqrt(np.abs(i1.astype("float") - i2.astype("float"))))
     err /= float(i1.shape[0] * i2.shape[1])
+    return err
+
+
+def MRE_ws(i1, i2, h, w):
+    """
+    Computes the mean root error, h,w dimensions.
+    :param i1:
+    :param i2:
+    :param h:
+    :param w:
+    :return:
+    """
+    err = np.sum(np.sqrt(np.abs(i1.astype("float") - i2.astype("float"))))
+    err /= float(h * w)
     return err
 
 

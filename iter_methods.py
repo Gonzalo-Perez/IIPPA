@@ -313,32 +313,74 @@ def randomize_null_triags(v, tolerance=.005):
     return v
 
 
-# NEEDS REFACTORING
-def accelerated_descent(target_image, norm, max_iter, tol):
+def accelerated_descent(target_image, N, norm_mode, L, theta_mode, max_iter=2000, tol=1e-4, delta=.2,
+                        diff_scheme_to_use=0, use_threads=True, show_progress=False):
     """
-    :param target_image:
-    :param norm:
-    :param max_iter:
-    :param tol:
+    Accelerated descent scheme.
+    :param target_image: array
+    :param N: int
+    :param norm_mode: int
+    :param L: positive float, the lipchitz constant.
+    :param theta_mode: int, 0: theta_1 = 2/(2+i). 1: theta_i+1 = 2/(1 + sqrt(1 + 4/theta_i))
+    :param max_iter: int
+    :param tol: float
+    :param delta: step for the numerical derivative.
+    :param diff_scheme_to_use: int, scheme for the numerical derivative
+    :param use_threads: bool
+    :param show_progress: bool
     :return:
     """
-    L = 1
-    theta = lambda n: 2 / (n + 2)
-    x_i = get_random_start()
+    """
+    x_i, z_i
+    y_i = (1-theta_i)x_i + theta_i * z_i
+    g = grad(y_i)
+    z_i+1 = z_i - g/(theta_i * L) 
+    x_i+1 = (1 - theta_i)x_i + theta_i z_i+1
+    
+    theta_i+1 = 2/(1 + sqrt(1 + 4/theta_i))
+    """
+    H = target_image.shape[0]
+    W = target_image.shape[1]
+    x_i = get_random_start_2(N)
     z_i = np.copy(x_i)
-    it = 0
+    it = 1
+    objective = []
+    th = 1
     while it < max_iter:
-        if it % 10 == 0: print(it)
-        y_i = (1 - theta(it)) * x_i + theta(it) * z_i
-        grad = numerical_grad(y_i, norm, target_image, N)
-        z_next = z_i - grad / (theta(it) * L)
-        x_next = (1 - theta(it)) * x_i + theta(it) * z_next
-        if norm(draw_image_1(x_i), draw_image_1(x_next)) < tol:
+        if theta_mode == 0:
+            th = 2 / (2 + it)
+        else:
+            th = 2 / (1 + np.sqrt(1 + 4 / th))
+
+        y_i = (1 - th) * x_i + th * z_i
+
+        print('computing gradient...')
+        tt = time.time()
+        grad = numerical_grad_2(x_i, norm_mode, target_image, delta=delta, _scheme=diff_scheme_to_use,
+                                parallel=use_threads)
+        print("Iteration: {0}, Elapsed time: {1}".format(it, time.time() - tt))
+
+        z_next = update_x(z_i, grad, 1 / (th * L), color_boundaries=True, vertex_boundaries=False)
+        x_next = (1 - th) * x_i + th * z_next
+
+        difference = general_norm_1(draw_image_2(x_i, H, W), target_image, norm_mode)
+        print("Difference from target: {0}".format(difference))
+        objective.append(difference)
+        if difference < tol:
             x_i = x_next
+            z_i = z_next
             break
         x_i = x_next
         z_i = z_next
+        if show_progress:
+            imagen = draw_image_2(x_i, H, W)
+            cv2.imshow("Objective", imagen)
+            if it % 5 == 0:
+                cv2.imwrite('iter_images/simple_grad_progress{}.png'.format(str(it)),
+                            np.array((imagen * 255), np.dtype(int)))
+            cv2.waitKey(1)
         it += 1
+    np.save('iter_vars/simple_grad_obj_function.npy', objective)
     return x_i
 
 

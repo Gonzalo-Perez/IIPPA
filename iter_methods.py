@@ -356,7 +356,7 @@ def accelerated_descent(target_image, N, norm_mode, L, theta_mode, max_iter=2000
 
         print('computing gradient...')
         tt = time.time()
-        grad = numerical_grad_2(x_i, norm_mode, target_image, delta=delta, _scheme=diff_scheme_to_use,
+        grad = numerical_grad_2(y_i, norm_mode, target_image, delta=delta, _scheme=diff_scheme_to_use,
                                 parallel=use_threads)
         print("Iteration: {0}, Elapsed time: {1}".format(it, time.time() - tt))
 
@@ -376,11 +376,11 @@ def accelerated_descent(target_image, N, norm_mode, L, theta_mode, max_iter=2000
             imagen = draw_image_2(x_i, H, W)
             cv2.imshow("Objective", imagen)
             if it % 5 == 0:
-                cv2.imwrite('iter_images/simple_grad_progress{}.png'.format(str(it)),
+                cv2.imwrite('iter_images/accelerated_grad_progress{}.png'.format(str(it)),
                             np.array((imagen * 255), np.dtype(int)))
             cv2.waitKey(1)
         it += 1
-    np.save('iter_vars/simple_grad_obj_function.npy', objective)
+    np.save('iter_vars/accelerated_grad_obj_function.npy', objective)
     return x_i
 
 

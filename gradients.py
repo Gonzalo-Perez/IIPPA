@@ -281,6 +281,105 @@ def num_stochastic_grad(vars, norm_mode, IMO, ratio_computed=.2, hard_max=-1, de
     return grad
 
 
+def num_grad_best(vars, norm_mode, IMO, index, delta=.2, scheme=0, warm_start=True, parallel=True):
+    """
+    Computes numerical gradient. Integrates all functionality, different differentiation schemes, the warm start,
+    parallelization, optimization for redundant calculations, variations in the norm and the posibility to
+    choose which variables to ignore.
+    :param vars: variables, N,10 matrix
+    :param norm_mode: integer, to chose norm mode
+    :param IMO: H,W,3 array, the objective image
+    :param index: array, subset of the index of vars.
+    :param delta: float, step for the numerical differentiation
+    :param scheme: integer, scheme for the numerical differentiation
+    :param warm_start: bool, if true the warm start optimization is used
+    :param parallel: bool, if true multiple cores are used in parallel to compute the different partial derivatives.
+    :return: 10*N array,
+    """
+    N = len(vars)
+    H, W = IMO.shape[0], IMO.shape[1]
+    grad = np.zeros((10 * N), dtype=float)
+
+    precom_layers = precompute_shape_layers(vars, H, W)
+    if parallel:
+        with mp.Pool() as p:
+            computed = p.starmap(partial_diff_best,
+                                 [(vars, H, W, precom_layers, norm_mode, IMO, i, delta, scheme, warm_start)
+                                  for i in index])
+        for i, c in enumerate(index):
+            grad[c] = computed[i]
+    else:
+        for i, c in enumerate(index):
+            grad[c] = partial_diff_best(vars, H, W, precom_layers, norm_mode, IMO, i, delta, scheme, warm_start)
+    return grad
+
+
+def partial_diff_best(vars, H, W, precom_layers, norm_mode, IMO, i, delta, scheme, warm_start):
+    """
+    Partial derivative that integrates all the functionalities. refer to the num_grad best for information on
+    the parameters used.
+    :param vars:
+    :param H:
+    :param W:
+    :param norm_mode:
+    :param IMO:
+    :param i:
+    :param delta:
+    :param scheme:
+    :param warm_start:
+    :return:
+    """
+
+    if scheme == 1:
+        per = (delta, - delta)
+        images = draw_multi_image_best(vars, H, W, i, per, crop=warm_start, precomp_layers=precom_layers)
+        if warm_start:
+            window = get_diff_window_efficiently_triags(vars, i, per, H, W)
+            # numpy magic to get index for submatrix
+            index = np.ix_(np.arange(window[2], window[3] + 1), np.arange(window[1], window[2] + 1), [0, 1, 2])
+            O = IMO[index]
+            d1 = general_norm_ws(images[0], O, H, W, norm_mode)
+            d2 = general_norm_ws(images[1], O, H, W, norm_mode)
+            return (d1 - d2) / (2 * delta)
+        else:
+            d1 = general_norm_1(images[0], IMO, norm_mode)
+            d2 = general_norm_1(images[1], IMO, norm_mode)
+            return (d1 - d2) / (2 * delta)
+    elif scheme == 2:
+        per = (2 * delta, delta, -delta, -2 * delta)
+        images = draw_multi_image_best(vars, H, W, i, per, crop=warm_start, precomp_layers=precom_layers)
+        if warm_start:
+            window = get_diff_window_efficiently_triags(vars, i, per, H, W)
+            index = np.ix_(np.arange(window[2], window[3] + 1), np.arange(window[1], window[2] + 1), [0, 1, 2])
+            O = IMO[index]
+            d1 = general_norm_ws(images[0], O, H, W, norm_mode)
+            d2 = general_norm_ws(images[1], O, H, W, norm_mode)
+            d3 = general_norm_ws(images[2], O, H, W, norm_mode)
+            d4 = general_norm_ws(images[3], O, H, W, norm_mode)
+            return ((8 * d2 + d4) - (8 * d3 + d1)) / (12 * delta)
+        else:
+            d1 = general_norm_1(images[0], IMO, norm_mode)
+            d2 = general_norm_1(images[1], IMO, norm_mode)
+            d3 = general_norm_1(images[2], IMO, norm_mode)
+            d4 = general_norm_1(images[3], IMO, norm_mode)
+            return ((8 * d2 + d4) - (8 * d3 + d1)) / (12 * delta)
+    else:
+        per = (delta, 0)
+        images = draw_multi_image_best(vars, H, W, i, per, crop=warm_start, precomp_layers=precom_layers)
+        if warm_start:
+            window = get_diff_window_efficiently_triags(vars, i, per, H, W)
+            # numpy magic to get index for submatrix
+            index = np.ix_(np.arange(window[2], window[3] + 1), np.arange(window[1], window[2] + 1), [0, 1, 2])
+            O = IMO[index]
+            d1 = general_norm_ws(images[0], O, H, W, norm_mode)
+            d2 = general_norm_ws(images[1], O, H, W, norm_mode)
+            return (d2 - d1) / (delta)
+        else:
+            d1 = general_norm_1(images[0], IMO, norm_mode)
+            d2 = general_norm_1(images[1], IMO, norm_mode)
+            return (d2 - d1) / (delta)
+
+
 def grad_warm_start(vars, norm, IMO, delta=.2, scheme=0, parallel=False):
     """ This needs atention to work well. other norms can be modified to be compatible.
     Returns the gradient computed numerically. The norm MUST be a SE-like. ie: must be a sum of a function(p1_i,p2_i),

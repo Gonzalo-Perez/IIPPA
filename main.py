@@ -1,7 +1,6 @@
 import numpy as np
 import cv2
 from iter_methods import *
-from measures import *
 
 """
 To do's:
@@ -63,8 +62,59 @@ tiene bugs, se utilizó una comparación "a la bruta" en el intertanto.
 """
 
 if __name__ == "__main__":
-    N = 20
+    from draw import *
+    from gradients import *
+    from measures import *
 
+    n = 5
+    v = get_random_start_2(n)
+
+    # w = np.array((0.1, .1, .9, .9, .1, .9))
+    # i = triag_matrix_2(w, .5, 600, 700)
+    # o = triag_matrix_ws(w, .5, 600, 700, 1, 1, 10, 10)
+    #
+    # e = i[1:11, 1:11]
+    # d = i[1:11, 1:11] != o
+    #
+    # cv2.imshow('bla', i)
+    # cv2.waitKey(0)
+    # # quit()
+
+    index = np.random.choice(np.arange(10 * n))
+    per = (-.4, .4)
+    H, W = 50, 80
+    im = np.random.uniform(size=(H, W, 3))
+
+    i1, i2 = draw_multi_image_2(v, H, W, index, per)
+    i3, i4 = draw_multi_image_cropped(v, H, W, index, per)
+    x0, x1, y0, y1 = get_diff_window_efficiently_triags(v, index, per, H, W)
+
+    cv2.imshow('bla', i1)
+    cv2.imshow('ble', i2)
+    cv2.imshow('bli', i3)
+    cv2.waitKey(0)
+
+    print(x0, x1, y0, y1)
+    print(x1 - x0 + 1, y1 - y0 + 1)
+    print(i3.shape)
+
+    print(np.sum((i1 - i2)))
+    print(np.sum((i1[y0:y1 + 1, x0:x1 + 1] - i2[y0:y1 + 1, x0:x1 + 1])))
+
+    print(np.sum((i3 - i4)))
+
+    diff = np.nonzero(i1[y0:y1 + 1, x0:x1 + 1] != i3)
+    d1 = (i1[y0:y1 + 1, x0:x1 + 1] != i3)[:, :, 0]
+    d2 = (i1[y0:y1 + 1, x0:x1 + 1] != i3)[:, :, 1]
+    d3 = (i1[y0:y1 + 1, x0:x1 + 1] != i3)[:, :, 2]
+
+    print(i1[y0:y1 + 1, x0:x1 + 1] != i3)
+    print(diff)
+
+    print(np.count_nonzero(i1[y0:y1 + 1, x0:x1 + 1] != i3))
+
+    quit()
+    N = 20
     img_objective = cv2.imread("Test_cases/blue_circle.png")
     H, W = len(img_objective), len(img_objective[0])
 

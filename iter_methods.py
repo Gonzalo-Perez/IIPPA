@@ -332,7 +332,7 @@ def randomize_null_triags(v, tolerance=.005):
     for i in range(len(v)):
         triag = v[i][0:6]
         if get_area_of_triangle(triag) < tolerance:
-            v[i] += update_x(v[i], np.random.uniform(-1, 1, 10), 0.05)
+            v[i] = update_x(v[i].reshape(1,10), np.random.uniform(-1, 1, 10), 0.05)
             # v[i] += 0.5 * np.array([np.random.uniform(-0.1,0.1), np.random.uniform(-0.1,0.1),
             #                   np.random.uniform(-0.1,0.1), np.random.uniform(-0.1,0.1),
             #                   np.random.uniform(-0.1,0.1), np.random.uniform(-0.1,0.1),

@@ -62,7 +62,7 @@ tiene bugs, se utilizó una comparación "a la bruta" en el intertanto.
 """
 
 if __name__ == "__main__":
-    N = 50
+    N = 5
     img_objective = cv2.imread("Test_cases/blue_circle.png")
     H, W = len(img_objective), len(img_objective[0])
 

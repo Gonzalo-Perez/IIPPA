@@ -1,6 +1,7 @@
 import numpy as np
 import cv2
 from iter_methods import *
+import os
 
 """
 To do's:
@@ -62,6 +63,22 @@ tiene bugs, se utilizó una comparación "a la bruta" en el intertanto.
 """
 
 if __name__ == "__main__":
+    try:
+        module_path = os.path.dirname(__file__)
+        folder_path = os.path.join(module_path, "iter_images")
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+    except Exception as e:
+        print(e)
+
+    try:
+        module_path = os.path.dirname(__file__)
+        folder_path = os.path.join(module_path, "iter_vars")
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+    except Exception as e:
+        print(e)
+
     N = 5
     img_objective = cv2.imread("Test_cases/blue_circle.png")
     H, W = len(img_objective), len(img_objective[0])
@@ -89,9 +106,9 @@ if __name__ == "__main__":
     # y = accelerated_descent(img_objective, N, norm_mode=0, L=1, theta_mode=1, max_iter=300, tol=1e-4, delta=.2,
     #                         diff_scheme_to_use=2, use_threads=True, show_progress=True)
 
-    # y = greedy_descent(img_objective, N, norm_mode=0, initial_x='', linesearch_num_steps=40, linesearch_step_size=.125,
-    #                    max_iter=300, tol=1e-4, null_triag_correction=True, steps_tolerance=4, triag_area_tol=0.003,
-    #                    _delta=.05, diff_scheme_to_use=2, show_progress=True, choose_triags=True)
+    y = greedy_descent(img_objective, N, norm_mode=0, initial_x='', linesearch_num_steps=40, linesearch_step_size=.125,
+                       max_iter=300, tol=1e-4, null_triag_correction=True, steps_tolerance=4, triag_area_tol=0.003,
+                       _delta=.05, diff_scheme_to_use=2, show_progress=True, choose_triags=True)
 
     # np.save('solution_stochastic_grad', y)
     quit()

@@ -57,59 +57,6 @@ def get_red_random_start_2(N):
     return vars
 
 
-def simple_gradient_method(target_image, N, norm, step, max_iter, tol, _delta=.2, diff_scheme_to_use=0,
-                           use_threads=False, show_progress=False):
-    """
-    Simple gradient descent
-    :param target_image: image to adjust. must have float colors
-    :param norm: norm to compare images
-    :param step: function, step to consider
-    :param max_iter: integer, max number of iterations
-    :param tol: double, tolerance to stop iterations
-    :param _delta: double, for numerical differentiation calculation
-    :param diff_scheme_to_use: {0,1,2} to be passed to numerical differentiation
-    :param use_threads: boolean
-    :param show_progress: boolean
-    :return:
-    """
-    H = target_image.shape[0]
-    W = target_image.shape[1]
-    x_i = get_random_start_2(N)
-    # x_i = get_red_random_start_2(N)
-    it = 0
-    while it < max_iter:
-        print('computing gradient...')
-        tt = time.time()
-        grad = numerical_grad(x_i, norm, target_image, delta=_delta, _scheme=diff_scheme_to_use,
-                              parallel=use_threads)
-        print("Iteration: {0}, Elapsed time: {1}".format(it, time.time() - tt))
-        # print("x: {0}".format(x_i))
-        x_next = update_x(x_i, grad, step(it), color_boundaries=True, vertex_boundaries=False)
-        difference = norm(draw_image_2(x_i, H, W), target_image)
-        # print("Gradient: {0}".format(grad))
-        print('Gradient:')
-        for i in range(10):
-            if i <= 5:
-                print('vertex:', grad[:, i])
-            else:
-                print('color:', grad[:, i])
-        print("Difference from target: {0}".format(difference))
-        if difference < tol:
-            x_i = x_next
-            break
-        x_i = x_next
-        if show_progress:
-            imagen = draw_image_2(x_i, H, W)
-            cv2.imshow("Objective", imagen)
-            if it % 5 == 0:
-                cv2.imwrite('iter_images/simple_grad_progress{}.png'.format(str(it)),
-                            np.array((imagen * 255), np.dtype(int)))
-            cv2.waitKey(1)
-
-        it += 1
-    return x_i
-
-
 def simple_gradient_method_parallel(target_image, N, norm_mode, step, max_iter, tol=1e-4, initial_x='', _delta=.2,
                                     diff_scheme_to_use=0, use_threads=True, show_progress=False):
     """
@@ -133,7 +80,10 @@ def simple_gradient_method_parallel(target_image, N, norm_mode, step, max_iter, 
         x_i = np.load(initial_x)
     # x_i = get_red_random_start_2(N)
     it = 0
-    objective = []
+    objective_function = []
+    times = []
+    gradients = []
+    start_time = time.time()
     while it < max_iter:
         print('computing gradient...')
         tt = time.time()
@@ -142,23 +92,14 @@ def simple_gradient_method_parallel(target_image, N, norm_mode, step, max_iter, 
         grad = num_grad_best(x_i, norm_mode, target_image, index, delta=_delta, scheme=diff_scheme_to_use,
                              warm_start=True, parallel=use_threads)
 
-        # grad2 = numerical_grad_2(x_i, norm_mode, target_image, delta=_delta, _scheme=diff_scheme_to_use,
-        #                          parallel=use_threads)
-        # print('grad diff:                                     ', MSE(grad, grad2))
-
         print("Iteration: {0}, Elapsed time: {1}".format(it, time.time() - tt))
-        # print("x: {0}".format(x_i))
         x_next = update_x(x_i, grad, step(it), color_boundaries=True, vertex_boundaries=False)
         difference = general_norm_1(draw_image_2(x_i, H, W), target_image, norm_mode)
-        # print("Gradient: {0}".format(grad))
-        # print('Gradient:')
-        # for i in range(10):
-        #     if i <= 5:
-        #         print('vertex:', grad[:, i]-grad2[:,i])
-        #     else:
-        #         print('color:', grad[:, i]-grad2[:,i])
+
         print("Difference from target: {0}".format(difference))
-        objective.append(difference)
+        objective_function.append(difference)
+        gradients.append(grad)
+        times.append(time.time() - start_time)
         if difference < tol:
             x_i = x_next
             break
@@ -171,7 +112,9 @@ def simple_gradient_method_parallel(target_image, N, norm_mode, step, max_iter, 
                             np.array((imagen * 255), np.dtype(int)))
             cv2.waitKey(1)
         it += 1
-    np.save('iter_vars/simple_grad_obj_function.npy', objective)
+    np.save('current_OF.npy', objective_function)
+    np.save('current_grads.npy', gradients)
+    np.save('times.npy', times)
     return x_i
 
 
@@ -210,7 +153,10 @@ def sim_grad_stochastic_parallel(target_image, N, norm_mode, initial_x='', stoc_
         x_i = np.load(initial_x)
     it = 0
     stuck_counter = 0
-    objective = []
+    objective_function = []
+    times = []
+    gradients = []
+    start_time = time.time()
     while it < max_iter:
         print('computing gradient...')
         tt = time.time()
@@ -252,7 +198,9 @@ def sim_grad_stochastic_parallel(target_image, N, norm_mode, initial_x='', stoc_
         #     else:
         #         print('color:', grad[:, i])
         print("Difference from target: {0}".format(difference))
-        objective.append(difference)
+        objective_function.append(difference)
+        gradients.append(grad)
+        times.append(time.time() - start_time)
         if difference < tol:
             x_i = x_next
             break
@@ -275,7 +223,9 @@ def sim_grad_stochastic_parallel(target_image, N, norm_mode, initial_x='', stoc_
                 np.save('iter_vars/stoc_grad_vars{}.npy'.format(str(it)), x_i)
             cv2.waitKey(1)
         it += 1
-    np.save('iter_vars/stoc_grad_obj_func.npy', objective)
+    np.save('current_OF.npy', objective_function)
+    np.save('current_grads.npy', gradients)
+    np.save('times.npy', times)
     return x_i
 
 
@@ -377,8 +327,11 @@ def accelerated_descent(target_image, N, norm_mode, L, theta_mode, initial_x='',
         x_i = np.load(initial_x)
     z_i = np.copy(x_i)
     it = 1
-    objective = []
     th = 1
+    objective_function = []
+    times = []
+    gradients = []
+    start_time = time.time()
     while it < max_iter:
         if theta_mode == 0:
             th = 2 / (2 + it)
@@ -401,7 +354,9 @@ def accelerated_descent(target_image, N, norm_mode, L, theta_mode, initial_x='',
 
         difference = general_norm_1(draw_image_2(x_i, H, W), target_image, norm_mode)
         print("Difference from target: {0}".format(difference))
-        objective.append(difference)
+        objective_function.append(difference)
+        gradients.append(grad)
+        times.append(time.time() - start_time)
         if difference < tol:
             x_i = x_next
             z_i = z_next
@@ -416,11 +371,12 @@ def accelerated_descent(target_image, N, norm_mode, L, theta_mode, initial_x='',
                             np.array((imagen * 255), np.dtype(int)))
             cv2.waitKey(1)
         it += 1
-    np.save('iter_vars/accelerated_grad_obj_function.npy', objective)
+    np.save('current_OF.npy', objective_function)
+    np.save('current_grads.npy', gradients)
+    np.save('current_times.npy', times)
     return x_i
 
 
-# NEEDS REFACTORING
 def greedy_descent(target_image, N, norm_mode, initial_x='',
                    linesearch_num_steps=40, linesearch_step_size=.25, max_iter=2000, tol=1e-4, _delta=.2,
                    diff_scheme_to_use=0, null_triag_correction=False, steps_tolerance=2,
@@ -434,7 +390,10 @@ def greedy_descent(target_image, N, norm_mode, initial_x='',
         x_i = np.load(initial_x)
     it = 0
     stuck_counter = 0
-    objective = []
+    objective_function = []
+    times = []
+    gradients = []
+    start_time = time.time()
     while it < max_iter:
         print('computing gradient...')
         tt = time.time()
@@ -475,7 +434,9 @@ def greedy_descent(target_image, N, norm_mode, initial_x='',
         #     else:
         #         print('color:', grad[:, i])
         print("Difference from target: {0}".format(difference))
-        objective.append(difference)
+        objective_function.append(difference)
+        gradients.append(grad)
+        times.append(time.time() - start_time)
         if difference < tol:
             x_i = x_next
             break
@@ -498,5 +459,7 @@ def greedy_descent(target_image, N, norm_mode, initial_x='',
                 np.save('iter_vars/greedy_grad_vars{}.npy'.format(str(it)), x_i)
             cv2.waitKey(1)
         it += 1
-    np.save('iter_vars/greedy_grad_obj_func.npy', objective)
+    np.save('current_OF.npy', objective_function)
+    np.save('current_grads.npy', gradients)
+    np.save('current_times.npy', times)
     return x_i

@@ -134,19 +134,26 @@ def simple_gradient_method_parallel(target_image, N, norm_mode, step, max_iter, 
     while it < max_iter:
         print('computing gradient...')
         tt = time.time()
-        grad = numerical_grad_2(x_i, norm_mode, target_image, delta=_delta, _scheme=diff_scheme_to_use,
-                                parallel=use_threads)
+
+        index = np.arange(10 * N, dtype=int)
+        grad = num_grad_best(x_i, norm_mode, target_image, index, delta=_delta, scheme=diff_scheme_to_use,
+                             warm_start=True, parallel=use_threads)
+
+        # grad2 = numerical_grad_2(x_i, norm_mode, target_image, delta=_delta, _scheme=diff_scheme_to_use,
+        #                          parallel=use_threads)
+        # print('grad diff:                                     ', MSE(grad, grad2))
+
         print("Iteration: {0}, Elapsed time: {1}".format(it, time.time() - tt))
         # print("x: {0}".format(x_i))
         x_next = update_x(x_i, grad, step(it), color_boundaries=True, vertex_boundaries=False)
         difference = general_norm_1(draw_image_2(x_i, H, W), target_image, norm_mode)
         # print("Gradient: {0}".format(grad))
-        print('Gradient:')
-        for i in range(10):
-            if i <= 5:
-                print('vertex:', grad[:, i])
-            else:
-                print('color:', grad[:, i])
+        # print('Gradient:')
+        # for i in range(10):
+        #     if i <= 5:
+        #         print('vertex:', grad[:, i]-grad2[:,i])
+        #     else:
+        #         print('color:', grad[:, i]-grad2[:,i])
         print("Difference from target: {0}".format(difference))
         objective.append(difference)
         if difference < tol:
@@ -204,9 +211,29 @@ def sim_grad_stochastic_parallel(target_image, N, norm_mode, initial_x='', stoc_
     while it < max_iter:
         print('computing gradient...')
         tt = time.time()
-        grad = num_stochastic_grad(x_i, norm_mode, target_image, ratio_computed=stoc_ratio, hard_max=v_max,
-                                   delta=_delta, _scheme=diff_scheme_to_use, parallel=use_threads,
-                                   choose_triags=choose_triags)
+
+        num_vars = N * 10
+        if choose_triags:
+            num_triags = N
+            if v_max > 0:
+                size = int(np.min((np.ceil(num_triags * stoc_ratio), v_max)))
+            else:
+                size = int(np.ceil(num_triags * stoc_ratio))
+            triag_choice = np.sort(np.random.choice(np.arange(num_triags), size, False))
+            choice = np.array([10 * i + j for i in triag_choice for j in range(10)])
+        else:
+            if v_max > 0:
+                size = np.min((round(num_vars * stoc_ratio), v_max))
+            else:
+                size = round(num_vars * stoc_ratio)
+            choice = np.sort(np.random.choice(np.arange(num_vars), size, False))
+
+        grad = num_grad_best(x_i, norm_mode, target_image, choice, delta=_delta, scheme=diff_scheme_to_use,
+                             warm_start=True, parallel=use_threads)
+
+        # grad = num_stochastic_grad(x_i, norm_mode, target_image, ratio_computed=stoc_ratio, hard_max=v_max,
+        #                            delta=_delta, _scheme=diff_scheme_to_use, parallel=use_threads,
+        #                            choose_triags=choose_triags)
         print('Gradient time: {}'.format(time.time() - tt))
         ttt = time.time()
         # x_next = update_x(x_i, grad, step(it), color_boundaries=True, vertex_boundaries=False)
@@ -302,7 +329,7 @@ def randomize_null_triags(v, tolerance=.005):
     for i in range(len(v)):
         triag = v[i][0:6]
         if get_area_of_triangle(triag) < tolerance:
-            v[i] += np.random.uniform(-.1, .1, 10)
+            v[i] += update_x(v[i], np.random.uniform(-1, 1, 10), 0.05)
             # v[i] += 0.5 * np.array([np.random.uniform(-0.1,0.1), np.random.uniform(-0.1,0.1),
             #                   np.random.uniform(-0.1,0.1), np.random.uniform(-0.1,0.1),
             #                   np.random.uniform(-0.1,0.1), np.random.uniform(-0.1,0.1),
@@ -356,8 +383,11 @@ def accelerated_descent(target_image, N, norm_mode, L, theta_mode, max_iter=2000
 
         print('computing gradient...')
         tt = time.time()
-        grad = numerical_grad_2(y_i, norm_mode, target_image, delta=delta, _scheme=diff_scheme_to_use,
-                                parallel=use_threads)
+
+        index = np.arange(10 * N, dtype=int)
+        grad = num_grad_best(x_i, norm_mode, target_image, index, delta=delta, scheme=diff_scheme_to_use,
+                             warm_start=True, parallel=use_threads)
+
         print("Iteration: {0}, Elapsed time: {1}".format(it, time.time() - tt))
 
         z_next = update_x(z_i, grad, 1 / (th * L), color_boundaries=True, vertex_boundaries=False)
@@ -385,35 +415,82 @@ def accelerated_descent(target_image, N, norm_mode, L, theta_mode, max_iter=2000
 
 
 # NEEDS REFACTORING
-def greedy_descent(target_image, norm, step, max_iter, tol):
-    """ WE SHOULD IMPLEMENT A LINESEARCH FOR THE CHOOSEN COORDINATE
-    greedy coordinate descent.
-    :param target_image:
-    :param norm:
-    :param step: function, takes a integer.
-    :param max_iter: just in case.
-    :return:
-    """
+def greedy_descent(target_image, N, norm_mode, initial_x='',
+                   linesearch_num_steps=40, linesearch_step_size=.25, max_iter=2000, tol=1e-4, _delta=.2,
+                   diff_scheme_to_use=0, null_triag_correction=False, steps_tolerance=2,
+                   triag_area_tol=.01, use_threads=True, show_progress=False, choose_triags=False):
 
-    x_i = get_random_start()
+    H = target_image.shape[0]
+    W = target_image.shape[1]
+    if initial_x == '':
+        x_i = get_random_start_2(N)
+    else:
+        x_i = np.load(initial_x)
     it = 0
+    stuck_counter = 0
+    objective = []
     while it < max_iter:
         print('computing gradient...')
         tt = time.time()
-        grad = numerical_grad(x_i, norm, target_image, N)
+
+        index = np.arange(10 * N, dtype=int)
+        grad = num_grad_best(x_i, norm_mode, target_image, index, delta=_delta, scheme=diff_scheme_to_use,
+                             warm_start=True, parallel=use_threads)
+
+        num_vars = N * 10
+        if choose_triags:
+            norms = []
+            for i in range(N):
+                norms.append(np.linalg.norm(grad[i]))
+                index_max = np.argmax(norms)
+            for i in range(N):
+                if i != index_max:
+                    grad[i] = np.zeros_like(grad[i])
+        else:
+            grad = np.ravel(grad)
+            index_max = np.argmax(grad)
+            v = grad[index_max]
+            grad = np.zeros_like(grad)
+            grad[index_max] = v
+            grad = grad.reshape(N,10)
+
+        print('Gradient time: {}'.format(time.time() - tt))
+        ttt = time.time()
+        # x_next = update_x(x_i, grad, step(it), color_boundaries=True, vertex_boundaries=False)
+        x_next = simple_line_search(target_image, H, W, norm_mode, x_i, grad,
+                                    linesearch_num_steps, linesearch_step_size)
+        difference = general_norm_1(draw_image_2(x_i, H, W), target_image, norm_mode)
+        print('Linesearch time: {}'.format(time.time() - ttt))
         print("Iteration: {0}, Elapsed time: {1}".format(it, time.time() - tt))
-        n_ = (grad == np.max(grad))
-        if np.count_nonzero(n_) >= 2:
-            n_ = np.zeros_like(n_)
-        x_next = x_i - step(it) * n_
-        difference = norm(draw_image_1(x_i), target_image)
-        print("Gradient: {0}".format(grad))
+        # print('Gradient:')
+        # for i in range(10):
+        #     if i <= 5:
+        #         print('vertex:', grad[:, i])
+        #     else:
+        #         print('color:', grad[:, i])
         print("Difference from target: {0}".format(difference))
+        objective.append(difference)
         if difference < tol:
             x_i = x_next
             break
+        if null_triag_correction:
+            if np.count_nonzero(x_i != x_next) == 0:
+                stuck_counter += 1
+                if stuck_counter >= steps_tolerance:
+                    x_next = randomize_null_triags(x_next, triag_area_tol)
+                    stuck_counter = 0
+            else:
+                stuck_counter = 0
         x_i = x_next
-        cv2.imshow("Objective", draw_image_1(x_i))
-        cv2.waitKey(1)
+        if show_progress:
+            imagen = draw_image_2(x_i, H, W)
+            cv2.imshow("Objective", imagen)
+            if it % 5 == 0:
+                cv2.imwrite('iter_images/greedy_grad_progress{}.png'.format(str(it)),
+                            np.array((imagen * 255), np.dtype(int)))
+            if it % 50 == 0:
+                np.save('iter_vars/greedy_grad_vars{}.npy'.format(str(it)), x_i)
+            cv2.waitKey(1)
         it += 1
+    np.save('iter_vars/greedy_grad_obj_func.npy', objective)
     return x_i

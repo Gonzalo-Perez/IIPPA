@@ -1,5 +1,7 @@
 import numpy as np
 import cv2
+import multiprocessing as mp
+import time
 
 
 def triag_matrix_2(x, alpha, H, W):
@@ -274,6 +276,10 @@ def get_diff_window_efficiently_triags(vars, i, deltas, H, W):
         y_min = np.min((int(v[1] * H), int(v[3] * H), int(v[5] * H)))
         y_max = np.max((int(v[1] * H), int(v[3] * H), int(v[5] * H)))
         pass
+    x_min -= 1
+    y_min -= 1
+    x_max += 1
+    y_max += 1
     x_min = np.max((0, x_min))
     x_max = np.min((W, x_max))
     y_min = np.max((0, y_min))
@@ -281,7 +287,7 @@ def get_diff_window_efficiently_triags(vars, i, deltas, H, W):
     return x_min, x_max, y_min, y_max
 
 
-def precompute_shape_layers(vars, H, W, background_alpha=.05):
+def precompute_shape_layers(vars, H, W, background_color=(1., 1., 1.), background_alpha=.05, use_treads=False):
     """
     Returns a cubic matrix with the layers that form the image.
     :param vars: variables.
@@ -290,18 +296,160 @@ def precompute_shape_layers(vars, H, W, background_alpha=.05):
     :param background_alpha: preset for the canvas.
     :return: H,W,N+1 matrix. (N num triangles)
     """
-    N = len(vars)
-    shape_matrix = np.zeros((H, W, N + 1), dtype=float)
-    for i in range(N):
-        vertex = np.array(vars[i][0:6])
-        args = vertex, np.max(vars[i][-1], 0)
-        shape_matrix[:, :, i + 1] = triag_matrix_2(args[0], args[1], H, W)
-    shape_matrix[:, :, 0] = np.ones((H, W)) * background_alpha
-    return shape_matrix
+    if use_treads:
+        N = len(vars)
+        shape_matrix = np.zeros((H, W, N + 1), dtype=float)
+        args = []
+        for i in range(N):
+            vertex = np.array(vars[i][0:6])
+            args.append((vertex, np.max(vars[i][-1], 0)))
+        with mp.Pool() as p:
+            computed = p.starmap(triag_matrix_2, [(args[i][0], args[i][1], H, W) for i in range(N)])
+        for i in range(N):
+            shape_matrix[:, :, i + 1] = computed[i]
+        shape_matrix[:, :, 0] = np.ones((H, W)) * background_alpha
+        alpha_sum = np.sum(shape_matrix, axis=2)
+        RGB = np.zeros((N + 1, 3), dtype=float)
+        RGB[0] = background_color
+        RGB[1:] = vars[:, 6:9]
+        RGB = RGB * (RGB < 1) * (RGB >= 0) + (RGB >= 1)
+        return shape_matrix, alpha_sum, RGB
+    else:
+        N = len(vars)
+        shape_matrix = np.zeros((H, W, N + 1), dtype=float)
+        for i in range(N):
+            vertex = np.array(vars[i][0:6])
+            args = vertex, np.max(vars[i][-1], 0)
+            shape_matrix[:, :, i + 1] = triag_matrix_2(args[0], args[1], H, W)
+        shape_matrix[:, :, 0] = np.ones((H, W)) * background_alpha
+        alpha_sum = np.sum(shape_matrix, axis=2)
+        RGB = np.zeros((N + 1, 3), dtype=float)
+        RGB[0] = background_color
+        RGB[1:] = vars[:, 6:9]
+        RGB = RGB * (RGB < 1) * (RGB >= 0) + (RGB >= 1)
+        return shape_matrix, alpha_sum, RGB
+
+
+#
+# def draw_multi_image_best2(vars, H, W, index, perturbations, background_color=(1., 1., 1.),
+#                           background_alpha=.05, crop=False, precomp_layers=None):
+#     """
+#     Integrates all the fukin shit.
+#     :param vars: array, variables.
+#     :param H: height of the image
+#     :param W: width of the image
+#     :param index: intex of variable to be perturbated
+#     :param perturbations: array of perturbations
+#     :param background_color: preset, length 3 array
+#     :param background_alpha: float, preset
+#     :param crop: bool, if True the returned array is cropped to in the relevant window.
+#     :param precomp_layers: if not None, uses the precomp_layers to save time of redundant computation.
+#     :return: k,?,?,3 array. ?? depends on crop.
+#     """
+#     if precomp_layers is None:
+#         if crop:
+#             out = draw_multi_image_2(vars, H, W, index, perturbations, background_color, background_alpha)
+#             x0, x1, y0, y1 = get_diff_window_efficiently_triags(vars, index, perturbations, H, W)
+#             return out[:, y0:y1, x0:x1]
+#         else:
+#             return draw_multi_image_2(vars, H, W, index, perturbations, background_color, background_alpha)
+#     else:
+#         N = len(vars)
+#         K = len(perturbations)
+#         which_layer = index // 10
+#         ind = index % 10
+#         if ind < 6:
+#             v = list(vars)
+#             v_layer = v.pop(which_layer)
+#             h = [i for i in range(N + 1) if i != which_layer + 1]
+#             shape_matrix = precomp_layers[0][:, :, h]
+#             alpha_sum = precomp_layers[1] - precomp_layers[0][:, :, which_layer + 1]
+#             RGB = precomp_layers[2][h]
+#             out = shape_matrix @ RGB  # the matrix multiplication magic
+#
+#             outs = np.zeros((K, H, W, 3))
+#             for k in range(K):
+#                 u = np.copy(v_layer)
+#                 u[ind] += perturbations[k]
+#                 vertex = np.asarray(u)[0:6]
+#                 args = vertex, np.max((u[-1], 0))
+#                 lay = triag_matrix_2(args[0], args[1], H, W)
+#                 a_sum = alpha_sum + lay
+#                 lay.shape = H, W, 1
+#                 col = np.asarray(u[6:9])
+#                 col = col * (col >= 0) * (col < 1) + (col >= 1)  # Colors must be between 0 and 1.
+#                 col.shape = 1, 3
+#                 last = lay @ col
+#                 outs[k] = out + last
+#                 for i in range(3):  # Normalization
+#                     outs[k][:, :, i] = (outs[k][:, :, i] / a_sum)
+#             if crop:
+#                 x0, x1, y0, y1 = get_diff_window_efficiently_triags(vars, index, perturbations, H, W)
+#                 return outs[:, y0:y1, x0:x1]
+#             else:
+#                 return outs
+#         elif ind < 9:  # Change in colors.
+#             v = list(vars)
+#             v_layer = v.pop(which_layer)
+#             h = [i for i in range(N + 1) if i != which_layer + 1]
+#             shape_matrix = precomp_layers[0][:, :, h]
+#             a_sum = precomp_layers[1]
+#             RGB = precomp_layers[2][h]
+#             out = shape_matrix @ RGB  # the matrix multiplication magic
+#             outs = np.zeros((K, H, W, 3))
+#             lay = precomp_layers[0][:, :, which_layer + 1]  # plus one accounting for the background layer.
+#             lay.shape = H, W, 1
+#             for k in range(K):
+#                 u = np.copy(v_layer)
+#                 u[ind] += perturbations[k]
+#                 col = np.asarray(u[6:9])
+#                 col = col * (col >= 0) * (col < 1) + (col >= 1)  # Colors must be between 0 and 1.
+#                 col.shape = 1, 3
+#                 last = lay @ col
+#                 outs[k] = out + last
+#                 for i in range(3):  # Normalization
+#                     outs[k][:, :, i] = (outs[k][:, :, i] / a_sum)
+#             if crop:
+#                 x0, x1, y0, y1 = get_diff_window_efficiently_triags(vars, index, perturbations, H, W)
+#                 return outs[:, y0:y1, x0:x1]
+#             else:
+#                 return outs
+#         else:  # the perturbation is in the alpha.
+#             v = list(vars)
+#             v_layer = v.pop(which_layer)
+#             h = [i for i in range(N + 1) if i != which_layer + 1]
+#             shape_matrix = precomp_layers[0][:, :, h]
+#             alpha_sum = precomp_layers[1] - precomp_layers[0][:, :, which_layer + 1]
+#             RGB = precomp_layers[2][h]
+#             out = shape_matrix @ RGB  # the matrix multiplication magic
+#
+#             outs = np.zeros((K, H, W, 3))
+#             if v_layer[9] != 0:
+#                 base_lay = precomp_layers[0][:, :, which_layer + 1] == v_layer[9]
+#             else:
+#                 base_lay = triag_matrix_2(v_layer[0:6], 1, H, W)
+#             base_lay.shape = H, W, 1
+#             col = np.asarray(v_layer[6:9])
+#             col = col * (col >= 0) * (col < 1) + (col >= 1)  # Colors must be between 0 and 1.
+#             col.shape = 1, 3
+#             for k in range(K):
+#                 u = np.copy(v_layer)
+#                 alpha = np.max((0, u[ind] + perturbations[k]))
+#                 lay = base_lay * alpha
+#                 a_sum = alpha_sum + lay.reshape(lay.shape[0], lay.shape[1])
+#                 last = lay @ col
+#                 outs[k] = out + last
+#                 for i in range(3):  # Normalization
+#                     outs[k][:, :, i] = (outs[k][:, :, i] / a_sum)
+#             if crop:
+#                 x0, x1, y0, y1 = get_diff_window_efficiently_triags(vars, index, perturbations, H, W)
+#                 return outs[:, y0:y1, x0:x1]
+#             else:
+#                 return outs
 
 
 def draw_multi_image_best(vars, H, W, index, perturbations, background_color=(1., 1., 1.),
-                          background_alpha=.05, crop=False, precomp_layers=None):
+                           background_alpha=.05, crop=False, precomp_layers=None):
     """
     Integrates all the fukin shit.
     :param vars: array, variables.
@@ -319,7 +467,7 @@ def draw_multi_image_best(vars, H, W, index, perturbations, background_color=(1.
         if crop:
             out = draw_multi_image_2(vars, H, W, index, perturbations, background_color, background_alpha)
             x0, x1, y0, y1 = get_diff_window_efficiently_triags(vars, index, perturbations, H, W)
-            return out[:, y0:y1 + 1, x0:x1 + 1]
+            return out[:, y0:y1, x0:x1]
         else:
             return draw_multi_image_2(vars, H, W, index, perturbations, background_color, background_alpha)
     else:
@@ -327,112 +475,160 @@ def draw_multi_image_best(vars, H, W, index, perturbations, background_color=(1.
         K = len(perturbations)
         which_layer = index // 10
         ind = index % 10
+        x0, x1, y0, y1 = get_diff_window_efficiently_triags(vars, index, perturbations, H, W)
         if ind < 6:
-            v = list(vars)
-            v_layer = v.pop(which_layer)
-            shape_matrix = np.zeros((H, W, N), np.dtype('float'))
-            h = [i + 1 for i in range(N) if i != which_layer]
-            for i in range(N - 1):
-                shape_matrix[:, :, i + 1] = precomp_layers[h[i]]
-            shape_matrix[:, :, 0] = precomp_layers[0]  # adds white background
-            alpha_sum = np.sum(shape_matrix, axis=2)  # H,W dimension.
-            # The common part of the calculation.
-            RGB = list(np.asarray(v)[:, 6:9])  # colors N - 1
-            RGB.insert(0, background_color)  # insert manually the background
-            RGB = np.asarray(RGB)
-            RGB = RGB * (RGB < 1) * (RGB >= 0) + (RGB >= 1)  # Colors must be between 0 and 1.
-            out = shape_matrix @ RGB  # the matrix multiplication magic
-
-            outs = np.zeros((K, H, W, 3))
-            for k in range(K):
-                u = np.copy(v_layer)
-                u[ind] += perturbations[k]
-                vertex = np.asarray(u)[0:6]
-                args = vertex, np.max((u[-1], 0))
-                lay = triag_matrix_2(args[0], args[1], H, W)
-                a_sum = alpha_sum + lay
-                lay.shape = H, W, 1
-                col = np.asarray(u[6:9])
-                col = col * (col >= 0) * (col < 1) + (col >= 1)  # Colors must be between 0 and 1.
-                col.shape = 1, 3
-                last = lay @ col
-                outs[k] = out + last
-                for i in range(3):  # Normalization
-                    outs[k][:, :, i] = (outs[k][:, :, i] / a_sum)
             if crop:
-                x0, x1, y0, y1 = get_diff_window_efficiently_triags(vars, index, perturbations, H, W)
-                return out[:, y0:y1 + 1, x0:x1 + 1]
-            else:
+                v = list(vars)
+                v_layer = v.pop(which_layer)
+                h = [i for i in range(N + 1) if i != which_layer + 1]
+                shape_matrix = precomp_layers[0][y0:y1, x0:x1, h]
+                alpha_sum = precomp_layers[1][y0:y1, x0:x1] - precomp_layers[0][y0:y1, x0:x1, which_layer + 1]
+                RGB = precomp_layers[2][h]
+                out = shape_matrix @ RGB  # the matrix multiplication magic
+
+                outs = np.zeros((K, alpha_sum.shape[0], alpha_sum.shape[1], 3))
+                for k in range(K):
+                    u = np.copy(v_layer)
+                    u[ind] += perturbations[k]
+                    vertex = np.asarray(u)[0:6]
+                    args = vertex, np.max((u[-1], 0))
+                    lay = triag_matrix_ws(args[0], args[1], H, W, x0, y0, alpha_sum.shape[0], alpha_sum.shape[1])
+                    a_sum = alpha_sum + lay
+                    lay.shape = alpha_sum.shape[0], alpha_sum.shape[1], 1
+                    col = np.asarray(u[6:9])
+                    col = col * (col >= 0) * (col < 1) + (col >= 1)  # Colors must be between 0 and 1.
+                    col.shape = 1, 3
+                    last = lay @ col
+                    outs[k] = out + last
+                    for i in range(3):  # Normalization
+                        outs[k][:, :, i] = (outs[k][:, :, i] / a_sum)
                 return outs
-        elif ind < 9:
-            v = list(vars)
-            v_layer = v.pop(which_layer)
-            shape_matrix = np.zeros((H, W, N), np.dtype('float'))
-            h = [i + 1 for i in range(N) if i != which_layer]
-            for i in range(N - 1):
-                shape_matrix[:, :, i + 1] = precomp_layers[h[i]]
-            shape_matrix[:, :, 0] = precomp_layers[0]  # adds white background
-            alpha_sum = np.sum(shape_matrix, axis=2)  # H,W dimension.
-
-            # The common part of the calculation.
-            RGB = list(np.asarray(v)[:, 6:9])  # colors N - 1
-            RGB.insert(0, background_color)  # insert manually the background
-            RGB = np.asarray(RGB)
-            RGB = RGB * (RGB < 1) * (RGB >= 0) + (RGB >= 1)  # Colors must be between 0 and 1.
-            out = shape_matrix @ RGB  # the matrix multiplication magic
-
-            outs = np.zeros((K, H, W, 3))
-            lay = precomp_layers[which_layer + 1]  # plus one accounting for the background layer.
-            a_sum = alpha_sum + lay
-            lay.shape = H, W, 1
-            for k in range(K):
-                u = np.copy(v_layer)
-                u[ind] += perturbations[k]
-                col = np.asarray(u[6:9])
-                col = col * (col >= 0) * (col < 1) + (col >= 1)  # Colors must be between 0 and 1.
-                col.shape = 1, 3
-                last = lay @ col
-                outs[k] = out + last
-                for i in range(3):  # Normalization
-                    outs[k][:, :, i] = (outs[k][:, :, i] / a_sum)
-            if crop:
-                x0, x1, y0, y1 = get_diff_window_efficiently_triags(vars, index, perturbations, H, W)
-                return out[:, y0:y1 + 1, x0:x1 + 1]
             else:
+                v = list(vars)
+                v_layer = v.pop(which_layer)
+                h = [i for i in range(N + 1) if i != which_layer + 1]
+                shape_matrix = precomp_layers[0][:, :, h]
+                alpha_sum = precomp_layers[1] - precomp_layers[0][:, :, which_layer + 1]
+                RGB = precomp_layers[2][h]
+                out = shape_matrix @ RGB  # the matrix multiplication magic
+
+                outs = np.zeros((K, H, W, 3))
+                for k in range(K):
+                    u = np.copy(v_layer)
+                    u[ind] += perturbations[k]
+                    vertex = np.asarray(u)[0:6]
+                    args = vertex, np.max((u[-1], 0))
+                    lay = triag_matrix_2(args[0], args[1], H, W)
+                    a_sum = alpha_sum + lay
+                    lay.shape = H, W, 1
+                    col = np.asarray(u[6:9])
+                    col = col * (col >= 0) * (col < 1) + (col >= 1)  # Colors must be between 0 and 1.
+                    col.shape = 1, 3
+                    last = lay @ col
+                    outs[k] = out + last
+                    for i in range(3):  # Normalization
+                        outs[k][:, :, i] = (outs[k][:, :, i] / a_sum)
+                return outs
+
+        elif ind < 9:  # Change in colors.
+            if crop:
+                v = list(vars)
+                v_layer = v.pop(which_layer)
+                h = [i for i in range(N + 1) if i != which_layer + 1]
+                shape_matrix = precomp_layers[0][y0:y1, x0:x1, h]
+                a_sum = precomp_layers[1][y0:y1, x0:x1]
+                RGB = precomp_layers[2][h]
+                out = shape_matrix @ RGB  # the matrix multiplication magic
+                outs = np.zeros((K, a_sum.shape[0], a_sum.shape[1], 3))
+                lay = precomp_layers[0][y0:y1, x0:x1, which_layer + 1]  # plus one accounting for the background layer.
+                lay.shape = a_sum.shape[0], a_sum.shape[1], 1
+                for k in range(K):
+                    u = np.copy(v_layer)
+                    u[ind] += perturbations[k]
+                    col = np.asarray(u[6:9])
+                    col = col * (col >= 0) * (col < 1) + (col >= 1)  # Colors must be between 0 and 1.
+                    col.shape = 1, 3
+                    last = lay @ col
+                    outs[k] = out + last
+                    for i in range(3):  # Normalization
+                        outs[k][:, :, i] = (outs[k][:, :, i] / a_sum)
+                return outs
+            else:
+                v = list(vars)
+                v_layer = v.pop(which_layer)
+                h = [i for i in range(N + 1) if i != which_layer + 1]
+                shape_matrix = precomp_layers[0][:, :, h]
+                a_sum = precomp_layers[1]
+                RGB = precomp_layers[2][h]
+                out = shape_matrix @ RGB  # the matrix multiplication magic
+                outs = np.zeros((K, H, W, 3))
+                lay = precomp_layers[0][:, :, which_layer + 1]  # plus one accounting for the background layer.
+                lay.shape = H, W, 1
+                for k in range(K):
+                    u = np.copy(v_layer)
+                    u[ind] += perturbations[k]
+                    col = np.asarray(u[6:9])
+                    col = col * (col >= 0) * (col < 1) + (col >= 1)  # Colors must be between 0 and 1.
+                    col.shape = 1, 3
+                    last = lay @ col
+                    outs[k] = out + last
+                    for i in range(3):  # Normalization
+                        outs[k][:, :, i] = (outs[k][:, :, i] / a_sum)
                 return outs
         else:  # the perturbation is in the alpha.
-            v = list(vars)
-            v_layer = v.pop(which_layer)
-            shape_matrix = np.zeros((H, W, N), np.dtype('float'))
-            h = [i + 1 for i in range(N) if i != which_layer]
-            for i in range(N - 1):
-                shape_matrix[:, :, i + 1] = precomp_layers[h[i]]
-            shape_matrix[:, :, 0] = precomp_layers[0]  # adds white background
-            alpha_sum = np.sum(shape_matrix, axis=2)  # H,W dimension.
-            # The common part of the calculation.
-            RGB = list(np.asarray(v)[:, 6:9])  # colors N - 1
-            RGB.insert(0, background_color)  # insert manually the background
-            RGB = np.asarray(RGB)
-            RGB = RGB * (RGB < 1) * (RGB >= 0) + (RGB >= 1)  # Colors must be between 0 and 1.
-            out = shape_matrix @ RGB  # the matrix multiplication magic
-
-            outs = np.zeros((K, H, W, 3))
-            base_lay = precomp_layers[which_layer + 1] != 0
-            base_lay.shape = H, W, 1
-            col = np.asarray(v_layer[6:9])
-            col = col * (col >= 0) * (col < 1) + (col >= 1)  # Colors must be between 0 and 1.
-            col.shape = 1, 3
-            for k in range(K):
-                u = np.copy(v_layer)
-                u[ind] += perturbations[k]
-                lay = base_lay * (u[ind] + perturbations[k])
-                a_sum = alpha_sum + lay
-                last = lay @ col
-                outs[k] = out + last
-                for i in range(3):  # Normalization
-                    outs[k][:, :, i] = (outs[k][:, :, i] / a_sum)
             if crop:
-                x0, x1, y0, y1 = get_diff_window_efficiently_triags(vars, index, perturbations, H, W)
-                return out[:, y0:y1 + 1, x0:x1 + 1]
+                v = list(vars)
+                v_layer = v.pop(which_layer)
+                h = [i for i in range(N + 1) if i != which_layer + 1]
+                shape_matrix = precomp_layers[0][y0:y1, x0:x1, h]
+                alpha_sum = precomp_layers[1][y0:y1, x0:x1] - precomp_layers[0][y0:y1, x0:x1, which_layer + 1]
+                RGB = precomp_layers[2][h]
+                out = shape_matrix @ RGB  # the matrix multiplication magic
+                subH, subW = alpha_sum.shape[0], alpha_sum.shape[1]
+                outs = np.zeros((K, subH, subW, 3))
+                if v_layer[9] != 0:
+                    base_lay = precomp_layers[0][y0:y1, x0:x1, which_layer + 1] == v_layer[9]
+                else:
+                    base_lay = triag_matrix_ws(v_layer[0:6], 1, H, W, x0, y0, subH, subW)
+                base_lay.shape = subH, subW, 1
+                col = np.asarray(v_layer[6:9])
+                col = col * (col >= 0) * (col < 1) + (col >= 1)  # Colors must be between 0 and 1.
+                col.shape = 1, 3
+                for k in range(K):
+                    u = np.copy(v_layer)
+                    alpha = np.max((0, u[ind] + perturbations[k]))
+                    lay = base_lay * alpha
+                    a_sum = alpha_sum + lay.reshape(lay.shape[0], lay.shape[1])
+                    last = lay @ col
+                    outs[k] = out + last
+                    for i in range(3):  # Normalization
+                        outs[k][:, :, i] = (outs[k][:, :, i] / a_sum)
+                return outs
             else:
+                v = list(vars)
+                v_layer = v.pop(which_layer)
+                h = [i for i in range(N + 1) if i != which_layer + 1]
+                shape_matrix = precomp_layers[0][:, :, h]
+                alpha_sum = precomp_layers[1] - precomp_layers[0][:, :, which_layer + 1]
+                RGB = precomp_layers[2][h]
+                out = shape_matrix @ RGB  # the matrix multiplication magic
+
+                outs = np.zeros((K, H, W, 3))
+                if v_layer[9] != 0:
+                    base_lay = precomp_layers[0][:, :, which_layer + 1] == v_layer[9]
+                else:
+                    base_lay = triag_matrix_2(v_layer[0:6], 1, H, W)
+                base_lay.shape = H, W, 1
+                col = np.asarray(v_layer[6:9])
+                col = col * (col >= 0) * (col < 1) + (col >= 1)  # Colors must be between 0 and 1.
+                col.shape = 1, 3
+                for k in range(K):
+                    u = np.copy(v_layer)
+                    alpha = np.max((0, u[ind] + perturbations[k]))
+                    lay = base_lay * alpha
+                    a_sum = alpha_sum + lay.reshape(lay.shape[0], lay.shape[1])
+                    last = lay @ col
+                    outs[k] = out + last
+                    for i in range(3):  # Normalization
+                        outs[k][:, :, i] = (outs[k][:, :, i] / a_sum)
                 return outs

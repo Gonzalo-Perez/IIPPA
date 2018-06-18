@@ -69,6 +69,72 @@ def partial_dif_2_1(i, _vars, norm_mode, _IMO, _delta=.2, scheme=0):
         return (d2 - d1) / delta
 
 
+def partial_diff_best(vars, H, W, precom_layers, norm_mode, IMO, i, delta, scheme, warm_start):
+    """
+    Partial derivative that integrates all the functionalities. refer to the num_grad best for information on
+    the parameters used.
+    :param vars:
+    :param H:
+    :param W:
+    :param norm_mode:
+    :param IMO:
+    :param i:
+    :param delta:
+    :param scheme:
+    :param warm_start:
+    :return:
+    """
+
+    if scheme == 1:
+        per = (delta, - delta)
+        images = draw_multi_image_best(vars, H, W, i, per, crop=warm_start, precomp_layers=precom_layers)
+        if warm_start:
+            window = get_diff_window_efficiently_triags(vars, i, per, H, W)
+            # numpy magic to get index for submatrix
+            index = np.ix_(np.arange(window[2], window[3]), np.arange(window[0], window[1]), [0, 1, 2])
+            O = IMO[index]
+            d1 = general_norm_ws(images[0], O, H, W, norm_mode)
+            d2 = general_norm_ws(images[1], O, H, W, norm_mode)
+            return (d1 - d2) / (2 * delta)
+        else:
+            d1 = general_norm_1(images[0], IMO, norm_mode)
+            d2 = general_norm_1(images[1], IMO, norm_mode)
+            return (d1 - d2) / (2 * delta)
+    elif scheme == 2:
+        per = (2 * delta, delta, -delta, -2 * delta)
+        images = draw_multi_image_best(vars, H, W, i, per, crop=warm_start, precomp_layers=precom_layers)
+        if warm_start:
+            window = get_diff_window_efficiently_triags(vars, i, per, H, W)
+            index = np.ix_(np.arange(window[2], window[3]), np.arange(window[0], window[1]), [0, 1, 2])
+            O = IMO[index]
+            d1 = general_norm_ws(images[0], O, H, W, norm_mode)
+            d2 = general_norm_ws(images[1], O, H, W, norm_mode)
+            d3 = general_norm_ws(images[2], O, H, W, norm_mode)
+            d4 = general_norm_ws(images[3], O, H, W, norm_mode)
+            return ((8 * d2 + d4) - (8 * d3 + d1)) / (12 * delta)
+        else:
+            d1 = general_norm_1(images[0], IMO, norm_mode)
+            d2 = general_norm_1(images[1], IMO, norm_mode)
+            d3 = general_norm_1(images[2], IMO, norm_mode)
+            d4 = general_norm_1(images[3], IMO, norm_mode)
+            return ((8 * d2 + d4) - (8 * d3 + d1)) / (12 * delta)
+    else:
+        per = (delta, 0)
+        images = draw_multi_image_best(vars, H, W, i, per, crop=warm_start, precomp_layers=precom_layers)
+        if warm_start:
+            window = get_diff_window_efficiently_triags(vars, i, per, H, W)
+            # numpy magic to get index for submatrix
+            index = np.ix_(np.arange(window[2], window[3]), np.arange(window[0], window[1]), [0, 1, 2])
+            O = IMO[index]
+            d1 = general_norm_ws(images[0], O, H, W, norm_mode)
+            d2 = general_norm_ws(images[1], O, H, W, norm_mode)
+            return (d2 - d1) / (-delta)
+        else:
+            d1 = general_norm_1(images[0], IMO, norm_mode)
+            d2 = general_norm_1(images[1], IMO, norm_mode)
+            return (d2 - d1) / (-delta)
+
+
 def partial_dif_warm_start(i, _vars, norm_mode, _IMO, _delta=.2, scheme=0):
     """ INTENDED FOR CONTINIUS VARIABLES
     Numerical Partial derivative. Implements the idea of the "warm start". ie it will only calculate the
@@ -187,6 +253,10 @@ def get_diff_window_efficiently_triags(vars, i, deltas, H, W):
         y_min = np.min((int(v[1] * H), int(v[3] * H), int(v[5] * H)))
         y_max = np.max((int(v[1] * H), int(v[3] * H), int(v[5] * H)))
         pass
+    x_min -= 1
+    y_min -= 1
+    x_max += 1
+    y_max += 1
     x_min = np.max((0, x_min))
     x_max = np.min((W, x_max))
     y_min = np.max((0, y_min))
@@ -299,85 +369,17 @@ def num_grad_best(vars, norm_mode, IMO, index, delta=.2, scheme=0, warm_start=Tr
     N = len(vars)
     H, W = IMO.shape[0], IMO.shape[1]
     grad = np.zeros((10 * N), dtype=float)
-
-    precom_layers = precompute_shape_layers(vars, H, W)
+    precom_layers = precompute_shape_layers(vars, H, W, use_treads=parallel)
     if parallel:
         with mp.Pool() as p:
             computed = p.starmap(partial_diff_best,
                                  [(vars, H, W, precom_layers, norm_mode, IMO, i, delta, scheme, warm_start)
                                   for i in index])
-        for i, c in enumerate(index):
-            grad[c] = computed[i]
+        grad[index] = computed
     else:
         for i, c in enumerate(index):
             grad[c] = partial_diff_best(vars, H, W, precom_layers, norm_mode, IMO, i, delta, scheme, warm_start)
-    return grad
-
-
-def partial_diff_best(vars, H, W, precom_layers, norm_mode, IMO, i, delta, scheme, warm_start):
-    """
-    Partial derivative that integrates all the functionalities. refer to the num_grad best for information on
-    the parameters used.
-    :param vars:
-    :param H:
-    :param W:
-    :param norm_mode:
-    :param IMO:
-    :param i:
-    :param delta:
-    :param scheme:
-    :param warm_start:
-    :return:
-    """
-
-    if scheme == 1:
-        per = (delta, - delta)
-        images = draw_multi_image_best(vars, H, W, i, per, crop=warm_start, precomp_layers=precom_layers)
-        if warm_start:
-            window = get_diff_window_efficiently_triags(vars, i, per, H, W)
-            # numpy magic to get index for submatrix
-            index = np.ix_(np.arange(window[2], window[3] + 1), np.arange(window[1], window[2] + 1), [0, 1, 2])
-            O = IMO[index]
-            d1 = general_norm_ws(images[0], O, H, W, norm_mode)
-            d2 = general_norm_ws(images[1], O, H, W, norm_mode)
-            return (d1 - d2) / (2 * delta)
-        else:
-            d1 = general_norm_1(images[0], IMO, norm_mode)
-            d2 = general_norm_1(images[1], IMO, norm_mode)
-            return (d1 - d2) / (2 * delta)
-    elif scheme == 2:
-        per = (2 * delta, delta, -delta, -2 * delta)
-        images = draw_multi_image_best(vars, H, W, i, per, crop=warm_start, precomp_layers=precom_layers)
-        if warm_start:
-            window = get_diff_window_efficiently_triags(vars, i, per, H, W)
-            index = np.ix_(np.arange(window[2], window[3] + 1), np.arange(window[1], window[2] + 1), [0, 1, 2])
-            O = IMO[index]
-            d1 = general_norm_ws(images[0], O, H, W, norm_mode)
-            d2 = general_norm_ws(images[1], O, H, W, norm_mode)
-            d3 = general_norm_ws(images[2], O, H, W, norm_mode)
-            d4 = general_norm_ws(images[3], O, H, W, norm_mode)
-            return ((8 * d2 + d4) - (8 * d3 + d1)) / (12 * delta)
-        else:
-            d1 = general_norm_1(images[0], IMO, norm_mode)
-            d2 = general_norm_1(images[1], IMO, norm_mode)
-            d3 = general_norm_1(images[2], IMO, norm_mode)
-            d4 = general_norm_1(images[3], IMO, norm_mode)
-            return ((8 * d2 + d4) - (8 * d3 + d1)) / (12 * delta)
-    else:
-        per = (delta, 0)
-        images = draw_multi_image_best(vars, H, W, i, per, crop=warm_start, precomp_layers=precom_layers)
-        if warm_start:
-            window = get_diff_window_efficiently_triags(vars, i, per, H, W)
-            # numpy magic to get index for submatrix
-            index = np.ix_(np.arange(window[2], window[3] + 1), np.arange(window[1], window[2] + 1), [0, 1, 2])
-            O = IMO[index]
-            d1 = general_norm_ws(images[0], O, H, W, norm_mode)
-            d2 = general_norm_ws(images[1], O, H, W, norm_mode)
-            return (d2 - d1) / (delta)
-        else:
-            d1 = general_norm_1(images[0], IMO, norm_mode)
-            d2 = general_norm_1(images[1], IMO, norm_mode)
-            return (d2 - d1) / (delta)
+    return grad.reshape(N, 10)
 
 
 def grad_warm_start(vars, norm, IMO, delta=.2, scheme=0, parallel=False):

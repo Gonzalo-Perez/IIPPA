@@ -1,6 +1,7 @@
 import numpy as np
 import cv2
 import time
+import matplotlib.pyplot as plt
 
 from gradients import *
 from draw import *
@@ -332,6 +333,16 @@ def accelerated_descent(target_image, N, norm_mode, L, theta_mode, initial_x='',
     times = []
     gradients = []
     start_time = time.time()
+    iterations = []
+    distances = []
+    plt.ion()
+    plt.figure()
+    plt.plot(iterations, distances)
+    plt.title("Evolución de la función objetivo")
+    plt.xlabel("Iteraciones")
+    plt.ylabel("Distancia (MSE)")
+    plt.show()
+    plt.tight_layout()
     while it < max_iter:
         if theta_mode == 0:
             th = 2 / (2 + it)
@@ -370,6 +381,12 @@ def accelerated_descent(target_image, N, norm_mode, L, theta_mode, initial_x='',
                 cv2.imwrite('iter_images/accelerated_grad_progress{}.png'.format(str(it)),
                             np.array((imagen * 255), np.dtype(int)))
             cv2.waitKey(1)
+        iterations.append(it)
+        distances.append(difference)
+        plt.plot(iterations, distances, color="red")
+        plt.draw()
+        plt.tight_layout()
+        plt.pause(0.001)
         it += 1
     np.save('current_OF.npy', objective_function)
     np.save('current_grads.npy', gradients)
@@ -394,6 +411,16 @@ def greedy_descent(target_image, N, norm_mode, initial_x='',
     times = []
     gradients = []
     start_time = time.time()
+    iterations = []
+    distances = []
+    plt.ion()
+    plt.figure()
+    plt.plot(iterations, distances)
+    plt.title("Evolución de la función objetivo")
+    plt.xlabel("Iteraciones")
+    plt.ylabel("Distancia (MSE)")
+    plt.show()
+    plt.tight_layout()
     while it < max_iter:
         print('computing gradient...')
         tt = time.time()
@@ -458,6 +485,12 @@ def greedy_descent(target_image, N, norm_mode, initial_x='',
             if it % 50 == 0:
                 np.save('iter_vars/greedy_grad_vars{}.npy'.format(str(it)), x_i)
             cv2.waitKey(1)
+        iterations.append(it)
+        distances.append(difference)
+        plt.plot(iterations, distances, color="red")
+        plt.draw()
+        plt.tight_layout()
+        plt.pause(0.001)
         it += 1
     np.save('current_OF.npy', objective_function)
     np.save('current_grads.npy', gradients)

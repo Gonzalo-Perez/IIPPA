@@ -110,7 +110,7 @@ def simple_gradient_method(target_image, N, norm, step, max_iter, tol, _delta=.2
     return x_i
 
 
-def simple_gradient_method_parallel(target_image, N, norm_mode, step, max_iter, tol, _delta=.2,
+def simple_gradient_method_parallel(target_image, N, norm_mode, step, max_iter, tol=1e-4, initial_x='', _delta=.2,
                                     diff_scheme_to_use=0, use_threads=True, show_progress=False):
     """
     Simple gradient descent
@@ -127,7 +127,10 @@ def simple_gradient_method_parallel(target_image, N, norm_mode, step, max_iter, 
     """
     H = target_image.shape[0]
     W = target_image.shape[1]
-    x_i = get_random_start_2(N)
+    if initial_x == '' or initial_x is None:
+        x_i = get_random_start_2(N)
+    else:
+        x_i = np.load(initial_x)
     # x_i = get_red_random_start_2(N)
     it = 0
     objective = []
@@ -201,7 +204,7 @@ def sim_grad_stochastic_parallel(target_image, N, norm_mode, initial_x='', stoc_
     """
     H = target_image.shape[0]
     W = target_image.shape[1]
-    if initial_x == '':
+    if initial_x == '' or initial_x is None:
         x_i = get_random_start_2(N)
     else:
         x_i = np.load(initial_x)
@@ -340,7 +343,7 @@ def randomize_null_triags(v, tolerance=.005):
     return v
 
 
-def accelerated_descent(target_image, N, norm_mode, L, theta_mode, max_iter=2000, tol=1e-4, delta=.2,
+def accelerated_descent(target_image, N, norm_mode, L, theta_mode, initial_x='', max_iter=2000, tol=1e-4, delta=.2,
                         diff_scheme_to_use=0, use_threads=True, show_progress=False):
     """
     Accelerated descent scheme.
@@ -368,7 +371,10 @@ def accelerated_descent(target_image, N, norm_mode, L, theta_mode, max_iter=2000
     """
     H = target_image.shape[0]
     W = target_image.shape[1]
-    x_i = get_random_start_2(N)
+    if initial_x == '' or initial_x is None:
+        x_i = get_random_start_2(N)
+    else:
+        x_i = np.load(initial_x)
     z_i = np.copy(x_i)
     it = 1
     objective = []
